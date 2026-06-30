@@ -1,5 +1,11 @@
 {
   "app_title": "ClearHear",
-  "home_subtitle": "Transcribe & Summarize",
-  "increment_tooltip": "Increment"
+  "home_status_idle": "IDLE",
+  "home_status_active": "ACTIVE",
+  "home_speaker_label": "SPEAKER 1",
+  "home_placeholder_transcript": "Morning everyone, let's keep this ...",
+  "home_idle_prompt": "Tap Start captioning to begin listening.",
+  "home_start_captioning": "Start captioning",
+  "home_stop_captioning": "Stop captioning",
+  "home_stop": "Stop"
 }
