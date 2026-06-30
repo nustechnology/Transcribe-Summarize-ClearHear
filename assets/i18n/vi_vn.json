@@ -1,5 +1,11 @@
 {
   "app_title": "ClearHear",
-  "home_subtitle": "Phiên âm & Tóm tắt",
-  "increment_tooltip": "Tăng"
+  "home_status_idle": "CHỜ",
+  "home_status_active": "ĐANG CHẠY",
+  "home_speaker_label": "NGƯỜI NÓI 1",
+  "home_placeholder_transcript": "Chào buổi sáng mọi người, hãy tiếp tục ...",
+  "home_idle_prompt": "Nhấn Bắt đầu phụ đề để bắt đầu nghe.",
+  "home_start_captioning": "Bắt đầu phụ đề",
+  "home_stop_captioning": "Dừng phụ đề",
+  "home_stop": "Dừng"
 }

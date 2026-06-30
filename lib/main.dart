@@ -9,6 +9,10 @@ import 'style/theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Translation.load();
+
+  Get.locale = const Locale('en', 'US');
+  Get.fallbackLocale = const Locale('en', 'US');
+
   runApp(const ClearHearApp());
 }
 
@@ -20,7 +24,7 @@ class ClearHearApp extends StatelessWidget {
     return GetMaterialApp(
       title: StringKeys.appTitle.tr,
       debugShowCheckedModeBanner: false,
-      translations: Translation(),
+      translations: Translation.instance,
       locale: const Locale('en', 'US'),
       fallbackLocale: const Locale('en', 'US'),
       theme: AppTheme.light,
