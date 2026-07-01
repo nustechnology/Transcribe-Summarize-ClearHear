@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/lang/translation.dart';
+import 'package:transcribe_summarize_clearhear/screen/home/controllers/home_controller.dart';
 import 'package:transcribe_summarize_clearhear/screen/home/home_widget.dart';
 
 void main() {
@@ -10,6 +11,7 @@ void main() {
     await Translation.load();
     Get.locale = const Locale('en', 'US');
     Get.fallbackLocale = const Locale('en', 'US');
+    Get.put(HomeController());
 
     await tester.pumpWidget(
       GetMaterialApp(
@@ -19,7 +21,7 @@ void main() {
       ),
     );
 
-    expect(find.text('IDLE'), findsOneWidget);
+    expect(find.text('Idle'), findsOneWidget);
     expect(
       find.text('Tap Start captioning to begin listening.'),
       findsOneWidget,
