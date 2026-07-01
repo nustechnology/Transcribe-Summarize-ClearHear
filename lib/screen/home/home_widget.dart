@@ -4,22 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../lang/string_keys.dart';
+import '../../style/theme.dart';
 import 'controllers/home_controller.dart';
-
-abstract final class _AppColors {
-  static const background = Color(0xFFF0EFEC);
-  static const primary = Color(0xFF1C5B5B);
-  static const surface = Colors.white;
-  static const textPrimary = Color(0xFF1A1A1A);
-  static const textSecondary = Color(0xFF757575);
-  static const textMuted = Color(0xFF9E9E9E);
-  static const border = Color(0xFFE0E0E0);
-  static const confidenceBlue = Color(0xFF1976D2);
-  static const privacyBg = Color(0xFFE3F2FD);
-  static const statusIdle = Color(0xFFB0B0B0);
-  static const statusActive = Color(0xFF4CAF50);
-  static const stopRed = Color(0xFFE66754);
-}
 
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
@@ -30,7 +16,7 @@ class HomeView extends GetView<HomeController> {
       final isListening = controller.isCaptioning.value;
 
       return Scaffold(
-        backgroundColor: _AppColors.surface,
+        backgroundColor: AppColors.surface,
         body: SafeArea(
           child: Column(
             children: [
@@ -66,7 +52,6 @@ class HomeView extends GetView<HomeController> {
                   ),
                 ),
               ),
-              const _BottomNavBar(),
             ],
           ),
         ),
@@ -88,7 +73,7 @@ class _AppTitleBar extends StatelessWidget {
           style: const TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.w700,
-            color: _AppColors.primary,
+            color: AppColors.primary,
             letterSpacing: -0.5,
           ),
         ),
@@ -96,7 +81,7 @@ class _AppTitleBar extends StatelessWidget {
           onPressed: () {},
           icon: const Icon(
             Icons.settings_outlined,
-            color: _AppColors.textPrimary,
+            color: AppColors.textPrimary,
             size: 24,
           ),
           padding: EdgeInsets.zero,
@@ -118,9 +103,9 @@ class _StatusBar extends GetView<HomeController> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: _AppColors.background.withOpacity(0.5),
+          color: AppColors.background.withOpacity(0.5),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _AppColors.border.withOpacity(0.6)),
+          border: Border.all(color: AppColors.border.withOpacity(0.6)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -131,7 +116,7 @@ class _StatusBar extends GetView<HomeController> {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: isActive ? _AppColors.statusActive : _AppColors.statusIdle,
+                    color: isActive ? AppColors.statusActive : AppColors.statusIdle,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -143,7 +128,7 @@ class _StatusBar extends GetView<HomeController> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: isActive ? _AppColors.primary : _AppColors.textMuted,
+                    color: isActive ? AppColors.primary : AppColors.textMuted,
                   ),
                 ),
                 if (isActive) ...[
@@ -154,7 +139,7 @@ class _StatusBar extends GetView<HomeController> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: _AppColors.statusActive.withOpacity(0.4),
+                        color: AppColors.statusActive.withOpacity(0.4),
                         width: 2,
                       ),
                     ),
@@ -163,7 +148,7 @@ class _StatusBar extends GetView<HomeController> {
                         width: 8,
                         height: 8,
                         decoration: const BoxDecoration(
-                          color: _AppColors.statusActive,
+                          color: AppColors.statusActive,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -195,7 +180,7 @@ class _FontSizeControl extends StatelessWidget {
   static const _labelStyle = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w500,
-    color: _AppColors.textPrimary,
+    color: AppColors.textPrimary,
   );
 
   @override
@@ -205,7 +190,7 @@ class _FontSizeControl extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF5F5F5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _AppColors.border),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -220,7 +205,7 @@ class _FontSizeControl extends StatelessWidget {
           Container(
             width: 1,
             height: 18,
-            color: _AppColors.border,
+            color: AppColors.border,
           ),
           _segment(
             labelKey: StringKeys.homeFontIncrease,
@@ -272,9 +257,9 @@ class _TranscriptCard extends GetView<HomeController> {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isCaptioning ? _AppColors.surface : _AppColors.background.withOpacity(0.5),
+          color: isCaptioning ? AppColors.surface : AppColors.background.withOpacity(0.5),
           borderRadius: BorderRadius.circular(16),
-          border: isCaptioning ? Border.all(color: _AppColors.border.withOpacity(0.5)) : null,
+          border: isCaptioning ? Border.all(color: AppColors.border.withOpacity(0.5)) : null,
           boxShadow: isCaptioning
               ? [
                   BoxShadow(
@@ -330,7 +315,7 @@ class _TranscriptCard extends GetView<HomeController> {
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: _AppColors.statusIdle,
+                color: AppColors.statusIdle,
                 letterSpacing: 0.8,
               ),
             ),
@@ -341,7 +326,7 @@ class _TranscriptCard extends GetView<HomeController> {
                 style: TextStyle(
                   fontSize: fontSize,
                   fontStyle: FontStyle.italic,
-                  color: _AppColors.textSecondary,
+                  color: AppColors.textSecondary,
                   height: 1.4,
                 ),
               )
@@ -350,7 +335,7 @@ class _TranscriptCard extends GetView<HomeController> {
                 transcript,
                 style: TextStyle(
                   fontSize: fontSize,
-                  color: _AppColors.textPrimary,
+                  color: AppColors.textPrimary,
                   height: 1.4,
                 ),
               )
@@ -360,7 +345,7 @@ class _TranscriptCard extends GetView<HomeController> {
                 style: TextStyle(
                   fontSize: fontSize,
                   fontStyle: FontStyle.italic,
-                  color: _AppColors.textSecondary,
+                  color: AppColors.textSecondary,
                   height: 1.4,
                 ),
               ),
@@ -371,7 +356,7 @@ class _TranscriptCard extends GetView<HomeController> {
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: _AppColors.statusIdle,
+                  color: AppColors.statusIdle,
                   letterSpacing: 0.8,
                 ),
               ),
@@ -380,7 +365,7 @@ class _TranscriptCard extends GetView<HomeController> {
                 summary,
                 style: TextStyle(
                   fontSize: fontSize - 4,
-                  color: _AppColors.textSecondary,
+                  color: AppColors.textSecondary,
                   height: 1.4,
                 ),
               ),
@@ -398,13 +383,13 @@ class _TranscriptCard extends GetView<HomeController> {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: _AppColors.background.withValues(alpha: 0.8),
+              color: AppColors.background.withValues(alpha: 0.8),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.message_outlined,
               size: 32,
-              color: _AppColors.primary,
+              color: AppColors.primary,
             ),
           ),
           const SizedBox(height: 16),
@@ -414,7 +399,7 @@ class _TranscriptCard extends GetView<HomeController> {
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: _AppColors.textPrimary,
+              color: AppColors.textPrimary,
               height: 1.3,
             ),
           ),
@@ -424,7 +409,7 @@ class _TranscriptCard extends GetView<HomeController> {
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: _AppColors.textPrimary,
+              color: AppColors.textPrimary,
               height: 1.3,
             ),
           ),
@@ -448,17 +433,17 @@ class _OptionsRow extends GetView<HomeController> {
             Expanded(
               child: _OptionChip(
                 icon: Icons.verified_user_outlined,
-                iconColor: _AppColors.primary,
+                iconColor: AppColors.primary,
                 labelKey: StringKeys.homeConfidenceLabel,
                 trailingKey: StringKeys.homeConfidenceHigh,
-                trailingColor: _AppColors.primary,
+                trailingColor: AppColors.primary,
               ),
             ),
             SizedBox(width: 12),
             Expanded(
               child: _OptionChip(
                 icon: Icons.language,
-                iconColor: _AppColors.primary,
+                iconColor: AppColors.primary,
                 labelKey: StringKeys.homeLanguageEnglish,
                 showChevron: true,
               ),
@@ -472,7 +457,7 @@ class _OptionsRow extends GetView<HomeController> {
           Expanded(
             child: _OptionChip(
               icon: Icons.language,
-              iconColor: _AppColors.primary,
+              iconColor: AppColors.primary,
               labelKey: StringKeys.homeLanguageEnglish,
               showChevron: true,
             ),
@@ -481,7 +466,7 @@ class _OptionsRow extends GetView<HomeController> {
           Expanded(
             child: _OptionChip(
               icon: Icons.verified_user_outlined,
-              iconColor: _AppColors.primary,
+              iconColor: AppColors.primary,
               labelKey: StringKeys.homeConfidenceLabel,
               trailingKey: StringKeys.homeConfidenceMedium,
             ),
@@ -516,11 +501,11 @@ class _OptionChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF5F5F5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _AppColors.border.withOpacity(0.6)),
+        border: Border.all(color: AppColors.border.withOpacity(0.6)),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: iconColor ?? _AppColors.textSecondary),
+          Icon(icon, size: 18, color: iconColor ?? AppColors.textSecondary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -528,7 +513,7 @@ class _OptionChip extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: _AppColors.textPrimary,
+                color: AppColors.textPrimary,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -539,14 +524,14 @@ class _OptionChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: trailingColor ?? _AppColors.confidenceBlue,
+                color: trailingColor ?? AppColors.confidenceBlue,
               ),
             ),
           if (showChevron)
             const Icon(
               Icons.keyboard_arrow_down,
               size: 20,
-              color: _AppColors.textMuted,
+              color: AppColors.textMuted,
             ),
         ],
       ),
@@ -572,7 +557,7 @@ class _AudioVisualizer extends GetView<HomeController> {
             const Icon(
               Icons.mic_none,
               size: 20,
-              color: _AppColors.textMuted,
+              color: AppColors.textMuted,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -628,7 +613,7 @@ class _AudioVisualizer extends GetView<HomeController> {
                     width: _listeningBarWidth,
                     height: height,
                     decoration: BoxDecoration(
-                      color: _AppColors.primary.withValues(alpha: opacity),
+                      color: AppColors.primary.withValues(alpha: opacity),
                       borderRadius: BorderRadius.circular(_listeningBarWidth),
                     ),
                   ),
@@ -659,7 +644,7 @@ class _PrimaryActionButton extends GetView<HomeController> {
                 labelKey: StringKeys.homeStopCaptioning,
                 icon: Icons.stop_rounded,
                 filled: true,
-                backgroundColor: _AppColors.stopRed,
+                backgroundColor: AppColors.stopRed,
                 foregroundColor: Colors.white,
                 onPressed: isProcessing ? null : controller.stopCaptioning,
               ),
@@ -706,8 +691,8 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = backgroundColor ?? (filled ? _AppColors.primary : _AppColors.surface);
-    final fgColor = foregroundColor ?? (filled ? Colors.white : _AppColors.primary);
+    final bgColor = backgroundColor ?? (filled ? AppColors.primary : AppColors.surface);
+    final fgColor = foregroundColor ?? (filled ? Colors.white : AppColors.primary);
 
     return Material(
       color: bgColor,
@@ -720,7 +705,7 @@ class _ActionButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: filled ? null : Border.all(color: _AppColors.primary),
+            border: filled ? null : Border.all(color: AppColors.primary),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -751,7 +736,7 @@ class _PauseButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _AppColors.surface,
+      color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onPressed,
@@ -761,12 +746,12 @@ class _PauseButton extends StatelessWidget {
           height: 52,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _AppColors.border),
+            border: Border.all(color: AppColors.border),
           ),
           child: const Icon(
             Icons.pause_rounded,
             size: 24,
-            color: _AppColors.textPrimary,
+            color: AppColors.textPrimary,
           ),
         ),
       ),
@@ -786,13 +771,13 @@ class _PrivacyNote extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: const BoxDecoration(
-            color: _AppColors.privacyBg,
+            color: AppColors.privacyBg,
             shape: BoxShape.circle,
           ),
           child: const Icon(
             Icons.lock_outline,
             size: 16,
-            color: _AppColors.confidenceBlue,
+            color: AppColors.confidenceBlue,
           ),
         ),
         const SizedBox(width: 12),
@@ -805,7 +790,7 @@ class _PrivacyNote extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
-                  color: _AppColors.confidenceBlue,
+                  color: AppColors.confidenceBlue,
                   height: 1.2,
                 ),
               ),
@@ -814,7 +799,7 @@ class _PrivacyNote extends StatelessWidget {
                 StringKeys.homePrivacyNotStored.tr,
                 style: const TextStyle(
                   fontSize: 8,
-                  color: _AppColors.textSecondary,
+                  color: AppColors.textSecondary,
                   height: 1,
                 ),
               ),
@@ -822,100 +807,6 @@ class _PrivacyNote extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _BottomNavBar extends GetView<HomeController> {
-  const _BottomNavBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      final selectedIndex = controller.selectedNavIndex.value;
-
-      return Container(
-        decoration: const BoxDecoration(
-          color: _AppColors.surface,
-          border: Border(top: BorderSide(color: _AppColors.border)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(
-                  icon: Icons.graphic_eq,
-                  selectedIcon: Icons.graphic_eq,
-                  labelKey: StringKeys.navLive,
-                  selected: selectedIndex == 0,
-                  onTap: () => controller.selectedNavIndex.value = 0,
-                ),
-                _NavItem(
-                  icon: Icons.history,
-                  selectedIcon: Icons.history,
-                  labelKey: StringKeys.navHistory,
-                  selected: selectedIndex == 1,
-                  onTap: () => controller.selectedNavIndex.value = 1,
-                ),
-                _NavItem(
-                  icon: Icons.description_outlined,
-                  selectedIcon: Icons.description,
-                  labelKey: StringKeys.navSummary,
-                  selected: selectedIndex == 2,
-                  onTap: () => controller.selectedNavIndex.value = 2,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    });
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
-    required this.selectedIcon,
-    required this.labelKey,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final IconData selectedIcon;
-  final String labelKey;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? _AppColors.primary : _AppColors.textMuted;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(selected ? selectedIcon : icon, size: 24, color: color),
-            const SizedBox(height: 4),
-            Text(
-              labelKey.tr,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -35,7 +35,6 @@ class HomeController extends GetxController {
   final isProcessing = false.obs;
   final transcriptFontSize = 20.0.obs;
   final statusMessage = ''.obs;
-  final selectedNavIndex = 0.obs;
   final isWhisperModelReady = false.obs;
   final isWhisperModelLoading = true.obs;
 
