@@ -1,0 +1,50 @@
+PODS:
+  - ffmpeg_kit_flutter_new_min (7.1.1):
+    - ffmpeg_kit_flutter_new_min/min (= 7.1.1)
+    - Flutter
+  - ffmpeg_kit_flutter_new_min/min (7.1.1):
+    - Flutter
+  - Flutter (1.0.0)
+  - flutter_llama (1.0.0):
+    - Flutter
+  - path_provider_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - record_ios (1.2.1):
+    - Flutter
+  - whisper_ggml (1.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - ffmpeg_kit_flutter_new_min (from `.symlinks/plugins/ffmpeg_kit_flutter_new_min/ios`)
+  - Flutter (from `Flutter`)
+  - flutter_llama (from `.symlinks/plugins/flutter_llama/ios`)
+  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
+  - record_ios (from `.symlinks/plugins/record_ios/ios`)
+  - whisper_ggml (from `.symlinks/plugins/whisper_ggml/ios`)
+
+EXTERNAL SOURCES:
+  ffmpeg_kit_flutter_new_min:
+    :path: ".symlinks/plugins/ffmpeg_kit_flutter_new_min/ios"
+  Flutter:
+    :path: Flutter
+  flutter_llama:
+    :path: ".symlinks/plugins/flutter_llama/ios"
+  path_provider_foundation:
+    :path: ".symlinks/plugins/path_provider_foundation/darwin"
+  record_ios:
+    :path: ".symlinks/plugins/record_ios/ios"
+  whisper_ggml:
+    :path: ".symlinks/plugins/whisper_ggml/ios"
+
+SPEC CHECKSUMS:
+  ffmpeg_kit_flutter_new_min: f28813df6012a3b3c0e66e4e9f3583a9b30be4d6
+  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  flutter_llama: e06a68d53f6b2d0c739b4fffd05ec4a08325fe44
+  path_provider_foundation: 2b6b4c569c0fb62ec74538f866245ac84301af46
+  record_ios: 3b171007ae5de51221a3a76d2b379a7105ca98b5
+  whisper_ggml: 0674f02c574459739082b96638918b344f02109d
+
+PODFILE CHECKSUM: aa9258622ae5fac53cf94c5df3fc39f03e4d4820
+
+COCOAPODS: 1.11.3
