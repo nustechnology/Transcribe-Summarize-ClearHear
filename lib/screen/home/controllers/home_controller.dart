@@ -1,8 +1,12 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../../lang/string_keys.dart';
 import '../../../service/audio_recorder_service.dart';
+import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
 import '../../../service/whisper_service.dart';
 
@@ -11,24 +15,57 @@ class HomeController extends GetxController {
     WhisperService? whisperService,
     LlamaService? llamaService,
     AudioRecorderService? audioRecorderService,
+    LiveTranscriptService? liveTranscriptService,
   })  : _whisperService = whisperService ?? WhisperService(),
         _llamaService = llamaService ?? LlamaService(),
         _audioRecorderService =
-            audioRecorderService ?? AudioRecorderService();
+            audioRecorderService ?? AudioRecorderService(),
+        _liveTranscriptService = liveTranscriptService;
 
   final WhisperService _whisperService;
   final LlamaService _llamaService;
   final AudioRecorderService _audioRecorderService;
+  final LiveTranscriptService? _liveTranscriptService;
+
+  LiveTranscriptService? _activeLiveTranscript;
 
   final isCaptioning = false.obs;
   final transcript = ''.obs;
   final summary = ''.obs;
   final isProcessing = false.obs;
-  final transcriptFontSize = 26.0.obs;
+  final transcriptFontSize = 20.0.obs;
   final statusMessage = ''.obs;
   final selectedNavIndex = 0.obs;
+  final isWhisperModelReady = false.obs;
+  final isWhisperModelLoading = true.obs;
 
-  String? _recordingPath;
+  LiveTranscriptService _createLiveTranscriptService() {
+    return _liveTranscriptService ??
+        LiveTranscriptService(
+          audioRecorderService: _audioRecorderService,
+          whisperService: _whisperService,
+        );
+  }
+
+  @override
+  void onInit() {
+    super.onInit();
+    unawaited(_preloadWhisperModel());
+  }
+
+  Future<void> _preloadWhisperModel() async {
+    isWhisperModelLoading.value = true;
+    try {
+      await _whisperService.ensureModelReady();
+      isWhisperModelReady.value = true;
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Whisper model preload failed: $error');
+      debugPrint('$stackTrace');
+      statusMessage.value = StringKeys.transcriptionModelFailed;
+    } finally {
+      isWhisperModelLoading.value = false;
+    }
+  }
 
   Future<void> toggleCaptioning() async {
     if (isCaptioning.value) {
@@ -39,7 +76,7 @@ class HomeController extends GetxController {
   }
 
   Future<void> startCaptioning() async {
-    if (isProcessing.value) return;
+    if (isProcessing.value || !isWhisperModelReady.value) return;
 
     try {
       final hasPermission = await _audioRecorderService.ensurePermission();
@@ -51,12 +88,25 @@ class HomeController extends GetxController {
       statusMessage.value = '';
       summary.value = '';
       transcript.value = '';
-      _recordingPath = await _audioRecorderService.startRecording();
+
+      final recordingPath = await _audioRecorderService.startRecording();
       isCaptioning.value = true;
+
+      _activeLiveTranscript = _createLiveTranscriptService();
+      await _activeLiveTranscript!.start(
+        onUpdate: (fullText) => transcript.value = fullText,
+      );
+
+      debugPrint('[Transcribe] Live recording started: $recordingPath');
     } on MissingPluginException {
+      debugPrint('[Transcribe] Recorder unavailable (MissingPluginException)');
       statusMessage.value = StringKeys.recorderUnavailable;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Start failed: $error');
+      debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionFailed;
+      _activeLiveTranscript?.dispose();
+      _activeLiveTranscript = null;
     }
   }
 
@@ -64,21 +114,29 @@ class HomeController extends GetxController {
     if (!isCaptioning.value) return;
 
     isCaptioning.value = false;
+    transcript.value = '';
+    summary.value = '';
     isProcessing.value = true;
     statusMessage.value = StringKeys.homeProcessing;
 
     try {
-      final path = await _audioRecorderService.stopRecording();
-      final audioPath = path ?? _recordingPath;
-      if (audioPath == null || audioPath.isEmpty) return;
+      final liveTranscript = _activeLiveTranscript;
+      if (liveTranscript == null) {
+        debugPrint('[Transcribe] Stop failed: live transcript not active');
+        return;
+      }
 
-      transcript.value = await _whisperService.transcribeFile(audioPath);
-    } catch (_) {
+      final result = await liveTranscript.finish();
+      debugPrint('[Transcribe] Final transcript:\n$result');
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Stop failed: $error');
+      debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionFailed;
     } finally {
+      _activeLiveTranscript?.dispose();
+      _activeLiveTranscript = null;
       isProcessing.value = false;
       statusMessage.value = '';
-      _recordingPath = null;
     }
   }
 
@@ -88,6 +146,7 @@ class HomeController extends GetxController {
 
     isProcessing.value = true;
     statusMessage.value = StringKeys.homeProcessing;
+    summary.value = '';
 
     try {
       if (!_llamaService.isModelLoaded) {
@@ -100,8 +159,14 @@ class HomeController extends GetxController {
         }
       }
 
-      summary.value = await _llamaService.summarize(text);
-    } catch (_) {
+      await for (final chunk in _llamaService.summarizeStream(text)) {
+        summary.value += chunk;
+        debugPrint('[Summary] chunk: $chunk');
+      }
+      debugPrint('[Summary] final:\n${summary.value}');
+    } catch (error, stackTrace) {
+      debugPrint('[Summary] failed: $error');
+      debugPrint('$stackTrace');
       statusMessage.value = StringKeys.summaryFailed;
     } finally {
       isProcessing.value = false;
@@ -125,6 +190,7 @@ class HomeController extends GetxController {
 
   @override
   void onClose() {
+    _activeLiveTranscript?.dispose();
     _audioRecorderService.dispose();
     super.onClose();
   }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -7,7 +9,6 @@ import 'controllers/home_controller.dart';
 abstract final class _AppColors {
   static const background = Color(0xFFF0EFEC);
   static const primary = Color(0xFF1C5B5B);
-  static const cardBackground = Color(0xFFE8E8E8);
   static const surface = Colors.white;
   static const textPrimary = Color(0xFF1A1A1A);
   static const textSecondary = Color(0xFF757575);
@@ -17,6 +18,7 @@ abstract final class _AppColors {
   static const privacyBg = Color(0xFFE3F2FD);
   static const statusIdle = Color(0xFFB0B0B0);
   static const statusActive = Color(0xFF4CAF50);
+  static const stopRed = Color(0xFFE66754);
 }
 
 class HomeView extends GetView<HomeController> {
@@ -24,40 +26,52 @@ class HomeView extends GetView<HomeController> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: _AppColors.surface,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    SizedBox(height: 12),
-                    _AppTitleBar(),
-                    SizedBox(height: 8),
-                    _StatusBar(),
-                    SizedBox(height: 16),
-                    Expanded(child: _TranscriptCard()),
-                    SizedBox(height: 12),
-                    _OptionsRow(),
-                    SizedBox(height: 16),
-                    _AudioVisualizer(),
-                    SizedBox(height: 16),
-                    _PrimaryActionButton(),
-                    SizedBox(height: 12),
-                    _PrivacyNote(),
-                    SizedBox(height: 8),
-                  ],
+    return Obx(() {
+      final isListening = controller.isCaptioning.value;
+
+      return Scaffold(
+        backgroundColor: _AppColors.surface,
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      const _AppTitleBar(),
+                      const SizedBox(height: 8),
+                      const _StatusBar(),
+                      const SizedBox(height: 16),
+                      const Expanded(child: _TranscriptCard()),
+                      const SizedBox(height: 12),
+                      if (isListening) ...[
+                        const _AudioVisualizer(),
+                        const SizedBox(height: 16),
+                        const _PrimaryActionButton(),
+                        const SizedBox(height: 12),
+                        const _OptionsRow(),
+                      ] else ...[
+                        const _OptionsRow(),
+                        const SizedBox(height: 16),
+                        const _AudioVisualizer(),
+                        const SizedBox(height: 16),
+                        const _PrimaryActionButton(),
+                        const SizedBox(height: 12),
+                        const _PrivacyNote(),
+                      ],
+                      const SizedBox(height: 8),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            _BottomNavBar(),
-          ],
+              const _BottomNavBar(),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 }
 
@@ -104,9 +118,9 @@ class _StatusBar extends GetView<HomeController> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: _AppColors.background,
+          color: _AppColors.background.withOpacity(0.5),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _AppColors.border),
+          border: Border.all(color: _AppColors.border.withOpacity(0.6)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -124,14 +138,38 @@ class _StatusBar extends GetView<HomeController> {
                 const SizedBox(width: 8),
                 Text(
                   isActive
-                      ? StringKeys.homeStatusActive.tr
+                      ? StringKeys.homeStatusListening.tr
                       : StringKeys.homeStatusIdle.tr,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: _AppColors.textMuted,
+                    fontWeight: FontWeight.w600,
+                    color: isActive ? _AppColors.primary : _AppColors.textMuted,
                   ),
                 ),
+                if (isActive) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _AppColors.statusActive.withOpacity(0.4),
+                        width: 2,
+                      ),
+                    ),
+                    child: Center(
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: _AppColors.statusActive,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             _FontSizeControl(
@@ -232,10 +270,20 @@ class _TranscriptCard extends GetView<HomeController> {
 
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: _AppColors.cardBackground,
+          color: isCaptioning ? _AppColors.surface : _AppColors.background.withOpacity(0.5),
           borderRadius: BorderRadius.circular(16),
+          border: isCaptioning ? Border.all(color: _AppColors.border.withOpacity(0.5)) : null,
+          boxShadow: isCaptioning
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: _buildContent(
           isCaptioning: isCaptioning,
@@ -346,20 +394,38 @@ class _TranscriptCard extends GetView<HomeController> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.chat_bubble_outline,
-            size: 40,
-            color: _AppColors.statusIdle,
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: _AppColors.background.withValues(alpha: 0.8),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.message_outlined,
+              size: 32,
+              color: _AppColors.primary,
+            ),
           ),
           const SizedBox(height: 16),
           Text(
-            StringKeys.homeIdlePrompt.tr,
+            StringKeys.homeIdlePromptLine1.tr,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
               color: _AppColors.textPrimary,
-              height: 1.4,
+              height: 1.3,
+            ),
+          ),
+          Text(
+            StringKeys.homeIdlePromptLine2.tr,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: _AppColors.textPrimary,
+              height: 1.3,
             ),
           ),
         ],
@@ -368,30 +434,61 @@ class _TranscriptCard extends GetView<HomeController> {
   }
 }
 
-class _OptionsRow extends StatelessWidget {
+class _OptionsRow extends GetView<HomeController> {
   const _OptionsRow();
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
-      children: [
-        Expanded(
-          child: _OptionChip(
-            icon: Icons.language,
-            labelKey: StringKeys.homeLanguageEnglish,
-            showChevron: true,
+    return Obx(() {
+      final isListening = controller.isCaptioning.value;
+
+      if (isListening) {
+        return const Row(
+          children: [
+            Expanded(
+              child: _OptionChip(
+                icon: Icons.verified_user_outlined,
+                iconColor: _AppColors.primary,
+                labelKey: StringKeys.homeConfidenceLabel,
+                trailingKey: StringKeys.homeConfidenceHigh,
+                trailingColor: _AppColors.primary,
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: _OptionChip(
+                icon: Icons.language,
+                iconColor: _AppColors.primary,
+                labelKey: StringKeys.homeLanguageEnglish,
+                showChevron: true,
+              ),
+            ),
+          ],
+        );
+      }
+
+      return const Row(
+        children: [
+          Expanded(
+            child: _OptionChip(
+              icon: Icons.language,
+              iconColor: _AppColors.primary,
+              labelKey: StringKeys.homeLanguageEnglish,
+              showChevron: true,
+            ),
           ),
-        ),
-        SizedBox(width: 12),
-        Expanded(
-          child: _OptionChip(
-            icon: Icons.verified_user_outlined,
-            labelKey: StringKeys.homeConfidenceLabel,
-            trailingKey: StringKeys.homeConfidenceMedium,
+          SizedBox(width: 12),
+          Expanded(
+            child: _OptionChip(
+              icon: Icons.verified_user_outlined,
+              iconColor: _AppColors.primary,
+              labelKey: StringKeys.homeConfidenceLabel,
+              trailingKey: StringKeys.homeConfidenceMedium,
+            ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    });
   }
 }
 
@@ -401,31 +498,35 @@ class _OptionChip extends StatelessWidget {
     required this.labelKey,
     this.trailingKey,
     this.showChevron = false,
+    this.iconColor,
+    this.trailingColor,
   });
 
   final IconData icon;
   final String labelKey;
   final String? trailingKey;
   final bool showChevron;
+  final Color? iconColor;
+  final Color? trailingColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: _AppColors.surface,
+        color: const Color(0xFFF5F5F5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _AppColors.border),
+        border: Border.all(color: _AppColors.border.withOpacity(0.6)),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: _AppColors.textSecondary),
+          Icon(icon, size: 18, color: iconColor ?? _AppColors.textSecondary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               labelKey.tr,
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: _AppColors.textPrimary,
               ),
@@ -435,10 +536,10 @@ class _OptionChip extends StatelessWidget {
           if (trailingKey != null)
             Text(
               trailingKey!.tr,
-              style: const TextStyle(
-                fontSize: 14,
+              style: TextStyle(
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: _AppColors.confidenceBlue,
+                color: trailingColor ?? _AppColors.confidenceBlue,
               ),
             ),
           if (showChevron)
@@ -456,41 +557,86 @@ class _OptionChip extends StatelessWidget {
 class _AudioVisualizer extends GetView<HomeController> {
   const _AudioVisualizer();
 
-  static const _barCount = 28;
+  static const _barCount = 32;
+  static const _listeningBarWidth = 2.5;
+  static const _listeningBarGap = 3.0;
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
       final isActive = controller.isCaptioning.value;
 
-      return Row(
-        children: [
-          Icon(
-            Icons.mic_none,
-            size: 20,
-            color: isActive ? _AppColors.primary : _AppColors.textMuted,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Row(
-              children: List.generate(_barCount, (index) {
-                final height = isActive ? 8.0 + (index % 5) * 3.0 : 10.0;
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 1),
-                    child: Container(
-                      height: height,
-                      decoration: BoxDecoration(
-                        color: isActive ? _AppColors.primary.withValues(alpha: 0.4) : const Color(0xFFD0D0D0),
-                        borderRadius: BorderRadius.circular(1.5),
+      if (!isActive) {
+        return Row(
+          children: [
+            const Icon(
+              Icons.mic_none,
+              size: 20,
+              color: _AppColors.textMuted,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Row(
+                children: List.generate(_barCount, (_) {
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Container(
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD0D0D0),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        );
+      }
+
+      return SizedBox(
+        height: 36,
+        width: double.infinity,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final barCount = math.max(
+              40,
+              ((constraints.maxWidth + _listeningBarGap) /
+                      (_listeningBarWidth + _listeningBarGap))
+                  .floor(),
+            );
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: List.generate(barCount, (index) {
+                final progress = index / barCount;
+                final wave = (math.sin(index * 0.55) * 0.4 +
+                        math.sin(index * 0.23 + 1) * 0.35 +
+                        math.sin(index * 0.91 + 2) * 0.25)
+                    .abs();
+                final height = 6.0 + wave * 26.0;
+                final opacity = (1.0 - progress * 0.9).clamp(0.08, 1.0);
+
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: index < barCount - 1 ? _listeningBarGap : 0,
+                  ),
+                  child: Container(
+                    width: _listeningBarWidth,
+                    height: height,
+                    decoration: BoxDecoration(
+                      color: _AppColors.primary.withValues(alpha: opacity),
+                      borderRadius: BorderRadius.circular(_listeningBarWidth),
                     ),
                   ),
                 );
               }),
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       );
     });
   }
@@ -504,48 +650,38 @@ class _PrimaryActionButton extends GetView<HomeController> {
     return Obx(() {
       final isCaptioning = controller.isCaptioning.value;
       final isProcessing = controller.isProcessing.value;
-      final hasTranscript = controller.transcript.value.trim().isNotEmpty;
 
       if (isCaptioning) {
-        return Column(
+        return Row(
           children: [
-            _ActionButton(
-              labelKey: StringKeys.homeStopCaptioning,
-              icon: Icons.stop_rounded,
-              filled: false,
-              onPressed: isProcessing ? null : controller.toggleCaptioning,
-            ),
-            if (hasTranscript) ...[
-              const SizedBox(height: 8),
-              _ActionButton(
-                labelKey: StringKeys.homeSummarize,
-                icon: Icons.summarize_outlined,
+            Expanded(
+              child: _ActionButton(
+                labelKey: StringKeys.homeStopCaptioning,
+                icon: Icons.stop_rounded,
                 filled: true,
-                onPressed: isProcessing ? null : controller.summarizeTranscript,
+                backgroundColor: _AppColors.stopRed,
+                foregroundColor: Colors.white,
+                onPressed: isProcessing ? null : controller.stopCaptioning,
               ),
-            ],
+            ),
+            const SizedBox(width: 12),
+            _PauseButton(onPressed: () {}),
           ],
         );
       }
 
-      return Column(
-        children: [
-          _ActionButton(
-            labelKey: StringKeys.homeStartCaptioning,
-            icon: Icons.mic,
-            filled: true,
-            onPressed: isProcessing ? null : controller.toggleCaptioning,
-          ),
-          if (hasTranscript) ...[
-            const SizedBox(height: 8),
-            _ActionButton(
-              labelKey: StringKeys.homeSummarize,
-              icon: Icons.summarize_outlined,
-              filled: false,
-              onPressed: isProcessing ? null : controller.summarizeTranscript,
-            ),
-          ],
-        ],
+      final isWhisperLoading = controller.isWhisperModelLoading.value;
+      final isStartDisabled =
+          isProcessing || isWhisperLoading || !controller.isWhisperModelReady.value;
+
+      return Opacity(
+        opacity: isWhisperLoading ? 0.45 : 1.0,
+        child: _ActionButton(
+          labelKey: StringKeys.homeStartCaptioning,
+          icon: Icons.mic,
+          filled: true,
+          onPressed: isStartDisabled ? null : controller.startCaptioning,
+        ),
       );
     });
   }
@@ -557,17 +693,24 @@ class _ActionButton extends StatelessWidget {
     required this.icon,
     required this.filled,
     required this.onPressed,
+    this.backgroundColor,
+    this.foregroundColor,
   });
 
   final String labelKey;
   final IconData icon;
   final bool filled;
   final VoidCallback? onPressed;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = backgroundColor ?? (filled ? _AppColors.primary : _AppColors.surface);
+    final fgColor = foregroundColor ?? (filled ? Colors.white : _AppColors.primary);
+
     return Material(
-      color: filled ? _AppColors.primary : _AppColors.surface,
+      color: bgColor,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onPressed,
@@ -582,21 +725,48 @@ class _ActionButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: filled ? Colors.white : _AppColors.primary,
-              ),
+              Icon(icon, size: 20, color: fgColor),
               const SizedBox(width: 10),
               Text(
                 labelKey.tr,
                 style: TextStyle(
-                  color: filled ? Colors.white : _AppColors.primary,
+                  color: fgColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PauseButton extends StatelessWidget {
+  const _PauseButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 56,
+          height: 52,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _AppColors.border),
+          ),
+          child: const Icon(
+            Icons.pause_rounded,
+            size: 24,
+            color: _AppColors.textPrimary,
           ),
         ),
       ),
@@ -610,8 +780,9 @@ class _PrivacyNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        const SizedBox(width: 18),
         Container(
           padding: const EdgeInsets.all(8),
           decoration: const BoxDecoration(
@@ -626,13 +797,28 @@ class _PrivacyNote extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            StringKeys.homePrivacyNote.tr,
-            style: const TextStyle(
-              fontSize: 13,
-              color: _AppColors.textSecondary,
-              height: 1.4,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                StringKeys.homePrivacyOnDevice.tr,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: _AppColors.confidenceBlue,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                StringKeys.homePrivacyNotStored.tr,
+                style: const TextStyle(
+                  fontSize: 8,
+                  color: _AppColors.textSecondary,
+                  height: 1,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -661,8 +847,8 @@ class _BottomNavBar extends GetView<HomeController> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _NavItem(
-                  icon: Icons.home_outlined,
-                  selectedIcon: Icons.home,
+                  icon: Icons.graphic_eq,
+                  selectedIcon: Icons.graphic_eq,
                   labelKey: StringKeys.navLive,
                   selected: selectedIndex == 0,
                   onTap: () => controller.selectedNavIndex.value = 0,
@@ -675,9 +861,9 @@ class _BottomNavBar extends GetView<HomeController> {
                   onTap: () => controller.selectedNavIndex.value = 1,
                 ),
                 _NavItem(
-                  icon: Icons.settings_outlined,
-                  selectedIcon: Icons.settings,
-                  labelKey: StringKeys.navSettings,
+                  icon: Icons.description_outlined,
+                  selectedIcon: Icons.description,
+                  labelKey: StringKeys.navSummary,
                   selected: selectedIndex == 2,
                   onTap: () => controller.selectedNavIndex.value = 2,
                 ),
