@@ -22,10 +22,8 @@ void main() {
     );
 
     expect(find.text('Idle'), findsOneWidget);
-    expect(
-      find.text('Tap Start captioning to begin listening.'),
-      findsOneWidget,
-    );
+    expect(find.text('Tap Start captioning'), findsOneWidget);
+    expect(find.text('to begin listening.'), findsOneWidget);
     expect(find.text('SPEAKER 1'), findsNothing);
     expect(find.text('Start captioning'), findsOneWidget);
     expect(find.text('home_status_idle'), findsNothing);

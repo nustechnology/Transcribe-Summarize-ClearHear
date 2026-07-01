@@ -33,6 +33,9 @@ migrate_working_dir/
 .pub/
 /build/
 
+# Native ML vendored sources (fetched by tool/setup_flutter_llama_android.sh)
+/third_party/llama.cpp/
+
 # FVM
 
 # Symbolication related

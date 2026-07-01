@@ -1,6 +1,8 @@
 import 'package:flutter_llama/flutter_llama.dart';
 
-/// On-device LLM inference for summarization via [flutter_llama].
+import '../config/ml_model_config.dart';
+
+/// On-device summarization via [flutter_llama] + Qwen2.5-0.5B.
 class LlamaService {
   LlamaService({FlutterLlama? llama}) : _llama = llama ?? FlutterLlama.instance;
 
@@ -8,12 +10,21 @@ class LlamaService {
 
   bool get isModelLoaded => _llama.isModelLoaded;
 
-  /// Download (if needed) and load the recommended Braindler preset.
+  /// Download (if needed) and load Qwen2.5-0.5B-Instruct GGUF.
   Future<bool> loadDefaultModel({
     required DownloadProgressCallback onProgress,
   }) {
-    return _llama.loadPresetModel(
-      preset: PresetModels.braindlerQ4K,
+    return _llama.loadModelWithAutoDownload(
+      modelId: MlModelConfig.summaryModelId,
+      source: ModelSource.huggingFace,
+      specificFile: MlModelConfig.summaryModelFile,
+      config: const LlamaConfig(
+        modelPath: '',
+        nThreads: 4,
+        nGpuLayers: -1,
+        contextSize: MlModelConfig.summaryContextSize,
+        useGpu: true,
+      ),
       onProgress: onProgress,
     );
   }
@@ -25,7 +36,7 @@ class LlamaService {
         modelPath: modelPath,
         nThreads: 4,
         nGpuLayers: -1,
-        contextSize: 2048,
+        contextSize: MlModelConfig.summaryContextSize,
         useGpu: true,
       ),
     );
@@ -35,17 +46,30 @@ class LlamaService {
   Future<String> summarize(String transcript) async {
     final response = await _llama.generate(
       GenerationParams(
-        prompt: '''
-Summarize the following transcript in 3-5 concise bullet points:
-
-$transcript
-''',
+        prompt: _summaryPrompt(transcript),
         maxTokens: 512,
         temperature: 0.7,
       ),
     );
     return response.text;
   }
+
+  /// Stream summary tokens as they are generated.
+  Stream<String> summarizeStream(String transcript) {
+    return _llama.generateStream(
+      GenerationParams(
+        prompt: _summaryPrompt(transcript),
+        maxTokens: 512,
+        temperature: 0.7,
+      ),
+    );
+  }
+
+  String _summaryPrompt(String transcript) => '''
+Summarize the following transcript in 3-5 concise bullet points:
+
+$transcript
+''';
 
   Future<void> unloadModel() => _llama.unloadModel();
 }

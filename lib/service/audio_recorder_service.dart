@@ -27,17 +27,29 @@ class AudioRecorderService {
     }
   }
 
+  String? _recordingPath;
+
   Future<String> startRecording() async {
     try {
       final recorder = await _ensureRecorder();
       final directory = await getTemporaryDirectory();
-      final path =
+      _recordingPath =
           '${directory.path}/caption_${DateTime.now().millisecondsSinceEpoch}.wav';
-      await recorder.start(_recordConfig, path: path);
-      return path;
+      await recorder.start(_recordConfig, path: _recordingPath!);
+      return _recordingPath!;
     } on MissingPluginException {
       rethrow;
     }
+  }
+
+  /// Stop the current segment and immediately start a new one for chunked STT.
+  Future<String?> rotateChunk() async {
+    final recorder = _recorder;
+    if (recorder == null) return null;
+
+    final completedPath = await recorder.stop();
+    await startRecording();
+    return completedPath ?? _recordingPath;
   }
 
   Future<String?> stopRecording() async {
