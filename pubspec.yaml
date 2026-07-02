@@ -40,6 +40,8 @@ dependencies:
   record: ^6.2.1
   path_provider: ^2.1.5
   whisper_ggml: ^1.7.0
+  intl: ^0.20.2
+  fluttertoast: ^9.0.0
 
 dev_dependencies:
   flutter_test:

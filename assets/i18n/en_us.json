@@ -2,7 +2,7 @@
   "app_title": "ClearHear",
   "home_status_idle": "Idle",
   "home_status_active": "Active",
-  "home_speaker_label": "SPEAKER 1",
+  "home_speaker_label": "SPEAKER",
   "home_placeholder_transcript": "Morning everyone, let's keep this ...",
   "home_idle_prompt_line1": "Tap Start captioning",
   "home_idle_prompt_line2": "to begin listening.",
@@ -37,5 +37,16 @@
   "home_demo_transcript_pending": "We should be ready for the field...",
   "home_demo_time": "9:41 AM",
   "nav_summary": "Summary",
-  "home_summarize": "Summarize"
+  "home_summarize": "Summarize",
+  "history_search_hint": "Search transcripts",
+  "history_no_results": "No saved sessions found.",
+  "history_secure_note": "Transcripts are stored securely on your device.",
+  "history_items_selected": "@count items selected",
+  "history_select_all": "Select All",
+  "history_deselect_all": "Deselect All",
+  "history_cancel": "Cancel",
+  "history_delete_confirm_title": "Delete @count Sessions?",
+  "history_delete_confirm_message": "Are you sure you want to permanently delete the selected session(s)?",
+  "history_delete_confirm_action": "Delete",
+  "history_delete_success": "Deleted @count sessions"
 }

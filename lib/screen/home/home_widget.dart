@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../lang/string_keys.dart';
+import '../../screen/history/history_widget.dart';
 import 'controllers/home_controller.dart';
 
 abstract final class _AppColors {
@@ -28,6 +29,7 @@ class HomeView extends GetView<HomeController> {
   Widget build(BuildContext context) {
     return Obx(() {
       final isListening = controller.isCaptioning.value;
+      final selectedIndex = controller.selectedNavIndex.value;
 
       return Scaffold(
         backgroundColor: _AppColors.surface,
@@ -35,36 +37,38 @@ class HomeView extends GetView<HomeController> {
           child: Column(
             children: [
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 12),
-                      const _AppTitleBar(),
-                      const SizedBox(height: 8),
-                      const _StatusBar(),
-                      const SizedBox(height: 16),
-                      const Expanded(child: _TranscriptCard()),
-                      const SizedBox(height: 12),
-                      if (isListening) ...[
-                        const _AudioVisualizer(),
-                        const SizedBox(height: 16),
-                        const _PrimaryActionButton(),
-                        const SizedBox(height: 12),
-                        const _OptionsRow(),
-                      ] else ...[
-                        const _OptionsRow(),
-                        const SizedBox(height: 16),
-                        const _AudioVisualizer(),
-                        const SizedBox(height: 16),
-                        const _PrimaryActionButton(),
-                        const SizedBox(height: 12),
-                        const _PrivacyNote(),
-                      ],
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                ),
+                child: selectedIndex == 1
+                    ? const HistoryView()
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 12),
+                            const _AppTitleBar(),
+                            const SizedBox(height: 8),
+                            const _StatusBar(),
+                            const SizedBox(height: 16),
+                            const Expanded(child: _TranscriptCard()),
+                            const SizedBox(height: 12),
+                            if (isListening) ...[
+                              const _AudioVisualizer(),
+                              const SizedBox(height: 16),
+                              const _PrimaryActionButton(),
+                              const SizedBox(height: 12),
+                              const _OptionsRow(),
+                            ] else ...[
+                              const _OptionsRow(),
+                              const SizedBox(height: 16),
+                              const _AudioVisualizer(),
+                              const SizedBox(height: 16),
+                              const _PrimaryActionButton(),
+                              const SizedBox(height: 12),
+                              const _PrivacyNote(),
+                            ],
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      ),
               ),
               const _BottomNavBar(),
             ],
