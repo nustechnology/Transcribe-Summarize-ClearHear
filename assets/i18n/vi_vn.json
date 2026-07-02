@@ -2,7 +2,7 @@
   "app_title": "ClearHear",
   "home_status_idle": "Chờ",
   "home_status_active": "Đang chạy",
-  "home_speaker_label": "NGƯỜI NÓI 1",
+  "home_speaker_label": "NGƯỜI NÓI",
   "home_placeholder_transcript": "Chào buổi sáng mọi người, hãy tiếp tục ...",
   "home_idle_prompt_line1": "Nhấn Bắt đầu phụ đề",
   "home_idle_prompt_line2": "để bắt đầu nghe.",
@@ -37,5 +37,16 @@
   "home_demo_transcript_pending": "Chúng ta sẽ sẵn sàng cho buổi thực địa...",
   "home_demo_time": "9:41 SA",
   "nav_summary": "Tóm tắt",
-  "home_summarize": "Tóm tắt"
+  "home_summarize": "Tóm tắt",
+  "history_search_hint": "Tìm theo tiêu đề hoặc nội dung...",
+  "history_no_results": "Không tìm thấy bản ghi đã lưu.",
+  "history_secure_note": "Bản ghi được lưu an toàn trên thiết bị của bạn.",
+  "history_items_selected": "Đã chọn @count mục",
+  "history_select_all": "Chọn tất cả",
+  "history_deselect_all": "Bỏ chọn tất cả",
+  "history_cancel": "Hủy",
+  "history_delete_confirm_title": "Xóa @count bản ghi?",
+  "history_delete_confirm_message": "Bạn có chắc chắn muốn xóa vĩnh viễn (các) bản ghi đã chọn không?",
+  "history_delete_confirm_action": "Xóa",
+  "history_delete_success": "Đã xóa @count bản ghi"
 }
