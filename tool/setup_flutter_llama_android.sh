@@ -33,8 +33,8 @@ PY
 )"
 
 if [[ -z "$FLUTTER_LLAMA_PATH" || ! -d "$FLUTTER_LLAMA_PATH" ]]; then
-  echo "flutter_llama package not found. Run 'flutter pub get'."
-  exit 1
+  echo "flutter_llama not in dependencies; skipping Android llama.cpp setup."
+  exit 0
 fi
 
 if [[ ! -f "$VENDOR_DIR/CMakeLists.txt" ]]; then

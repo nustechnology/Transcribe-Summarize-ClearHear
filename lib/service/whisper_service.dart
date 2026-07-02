@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:whisper_ggml/whisper_ggml.dart';
 
 import '../config/ml_model_config.dart';
@@ -34,38 +37,42 @@ class WhisperService {
     }
   }
 
-  /// Transcribe a 16 kHz WAV file at [audioPath].
-  Future<String> transcribeFile(
+  /// Transcribe a recording file produced by [AudioRecorderService].
+  Future<String> transcribeRecording(
     String audioPath, {
-    String language = 'auto',
-  }) async {
-    final text = await _transcribe(audioPath, language: language);
-    if (text.isEmpty) {
-      throw Exception('Transcription failed');
-    }
-    return text;
-  }
-
-  /// Transcribe a chunk; returns empty string when nothing was detected.
-  Future<String> transcribeChunk(
-    String audioPath, {
-    String language = 'auto',
-  }) {
-    return _transcribe(audioPath, language: language);
-  }
-
-  Future<String> _transcribe(
-    String audioPath, {
-    required String language,
+    String? language,
   }) async {
     await ensureModelReady();
+
+    final input = File(audioPath);
+    if (!await input.exists()) {
+      debugPrint('[Whisper] audio file missing: $audioPath');
+      return '';
+    }
+
+    final size = await input.length();
+    debugPrint('[Whisper] transcribing $size bytes at $audioPath');
 
     final result = await _controller.transcribe(
       model: _model,
       audioPath: audioPath,
-      lang: language,
+      lang: language ?? MlModelConfig.whisperLanguage,
     );
 
-    return result?.transcription.text.trim() ?? '';
+    final text = result?.transcription.text.trim() ?? '';
+    debugPrint('[Whisper] transcription: $text');
+    return text;
+  }
+
+  /// Transcribe an audio file at [audioPath].
+  Future<String> transcribeFile(
+    String audioPath, {
+    String? language,
+  }) async {
+    final text = await transcribeRecording(audioPath, language: language);
+    if (text.isEmpty) {
+      throw Exception('Transcription failed');
+    }
+    return text;
   }
 }

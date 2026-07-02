@@ -70,7 +70,10 @@ class TranscriptCard extends GetView<HomeController> {
       );
     }
 
-    if (isCaptioning || transcript.isNotEmpty || summary.isNotEmpty) {
+    if (isCaptioning ||
+        isProcessing ||
+        transcript.isNotEmpty ||
+        summary.isNotEmpty) {
       return SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

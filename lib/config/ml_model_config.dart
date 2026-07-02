@@ -2,16 +2,14 @@ import 'package:whisper_ggml/whisper_ggml.dart';
 
 /// On-device ML stack for ClearHear.
 abstract final class MlModelConfig {
-  /// Live captioning: Whisper via [whisper_ggml] (chunked while recording).
+  /// Captioning: Whisper via [whisper_ggml]. `tiny` is fastest on-device.
+  /// Use `base` or `small` if you need higher accuracy.
   static const liveWhisperModel = WhisperModel.tiny;
 
-  /// First transcript attempt — shorter than [liveChunkInterval].
-  static const liveInitialChunkDelay = Duration(milliseconds: 1500);
+  /// Whisper language code (`en`, `vi`, …).
+  static const whisperLanguage = 'en';
 
-  /// How often to rotate the recorder (decoupled from Whisper inference time).
-  static const liveChunkInterval = Duration(seconds: 2);
-
-  /// Summarization: Qwen2.5-0.5B via [flutter_llama].
+  /// Summarization: Qwen2.5-0.5B via flutter_llama (temporarily disabled).
   static const summaryModelId = 'Qwen/Qwen2.5-0.5B-Instruct-GGUF';
   static const summaryModelFile = 'qwen2.5-0.5b-instruct-q4_k_m.gguf';
   static const summaryContextSize = 4096;
