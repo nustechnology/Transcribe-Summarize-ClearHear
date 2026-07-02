@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
-import '../util/wav_util.dart';
+import '../utils/wav_util.dart';
 
 /// Accumulates PCM in memory and writes one-off WAV snapshots for Whisper.
 class LiveWavCapture {

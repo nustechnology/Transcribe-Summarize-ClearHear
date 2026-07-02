@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
 import '../config/ml_model_config.dart';
-import '../util/asr_text_util.dart';
-import '../util/sherpa_audio_util.dart';
+import '../utils/asr_text_util.dart';
+import '../utils/sherpa_audio_util.dart';
 
 /// On-device streaming speech recognition via [sherpa_onnx].
 class SherpaOnnxService {

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../style/theme.dart';
+import '../../lang/string_keys.dart';
+import '../../screen/history/history_widget.dart';
+import 'controllers/home_controller.dart';
 
 import 'components/app_title_bar.dart';
 import 'components/status_bar.dart';
