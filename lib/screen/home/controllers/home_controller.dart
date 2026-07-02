@@ -8,21 +8,21 @@ import '../../../lang/string_keys.dart';
 import '../../../service/audio_recorder_service.dart';
 import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
-import '../../../service/whisper_service.dart';
+import '../../../service/sherpa_onnx_service.dart';
 
 class HomeController extends GetxController {
   HomeController({
-    WhisperService? whisperService,
+    SherpaOnnxService? sherpaOnnxService,
     LlamaService? llamaService,
     AudioRecorderService? audioRecorderService,
     LiveTranscriptService? liveTranscriptService,
-  })  : _whisperService = whisperService ?? WhisperService(),
+  })  : _sherpaOnnxService = sherpaOnnxService ?? SherpaOnnxService(),
         _llamaService = llamaService ?? LlamaService(),
         _audioRecorderService =
             audioRecorderService ?? AudioRecorderService(),
         _liveTranscriptService = liveTranscriptService;
 
-  final WhisperService _whisperService;
+  final SherpaOnnxService _sherpaOnnxService;
   final LlamaService _llamaService;
   final AudioRecorderService _audioRecorderService;
   final LiveTranscriptService? _liveTranscriptService;
@@ -35,34 +35,34 @@ class HomeController extends GetxController {
   final isProcessing = false.obs;
   final transcriptFontSize = 20.0.obs;
   final statusMessage = ''.obs;
-  final isWhisperModelReady = false.obs;
-  final isWhisperModelLoading = true.obs;
+  final isAsrModelReady = false.obs;
+  final isAsrModelLoading = true.obs;
 
   LiveTranscriptService _createLiveTranscriptService() {
     return _liveTranscriptService ??
         LiveTranscriptService(
           audioRecorderService: _audioRecorderService,
-          whisperService: _whisperService,
+          sherpaOnnxService: _sherpaOnnxService,
         );
   }
 
   @override
   void onInit() {
     super.onInit();
-    unawaited(_preloadWhisperModel());
+    unawaited(_preloadAsrModel());
   }
 
-  Future<void> _preloadWhisperModel() async {
-    isWhisperModelLoading.value = true;
+  Future<void> _preloadAsrModel() async {
+    isAsrModelLoading.value = true;
     try {
-      await _whisperService.ensureModelReady();
-      isWhisperModelReady.value = true;
+      await _sherpaOnnxService.ensureModelReady();
+      isAsrModelReady.value = true;
     } catch (error, stackTrace) {
-      debugPrint('[Transcribe] Whisper model preload failed: $error');
+      debugPrint('[Transcribe] Sherpa model preload failed: $error');
       debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionModelFailed;
     } finally {
-      isWhisperModelLoading.value = false;
+      isAsrModelLoading.value = false;
     }
   }
 
@@ -75,7 +75,7 @@ class HomeController extends GetxController {
   }
 
   Future<void> startCaptioning() async {
-    if (isProcessing.value || !isWhisperModelReady.value) return;
+    if (isProcessing.value || !isAsrModelReady.value) return;
 
     try {
       final hasPermission = await _audioRecorderService.ensurePermission();
@@ -91,9 +91,11 @@ class HomeController extends GetxController {
       isCaptioning.value = true;
 
       _activeLiveTranscript = _createLiveTranscriptService();
-      await _activeLiveTranscript!.start();
+      await _activeLiveTranscript!.start(
+        onUpdate: (fullText) => transcript.value = fullText,
+      );
 
-      debugPrint('[Transcribe] Live streaming started');
+      debugPrint('[Transcribe] Realtime streaming started');
     } on MissingPluginException {
       debugPrint('[Transcribe] Recorder unavailable (MissingPluginException)');
       isCaptioning.value = false;
@@ -113,7 +115,6 @@ class HomeController extends GetxController {
 
     isCaptioning.value = false;
     summary.value = '';
-    isProcessing.value = true;
     statusMessage.value = '';
 
     try {
@@ -124,7 +125,9 @@ class HomeController extends GetxController {
         return;
       }
 
-      final result = await liveTranscript.finish();
+      final result = await liveTranscript.finish(
+        onUpdate: (fullText) => transcript.value = fullText,
+      );
       transcript.value = result;
       debugPrint('[Transcribe] Final transcript:\n$result');
     } catch (error, stackTrace) {
@@ -191,6 +194,7 @@ class HomeController extends GetxController {
   void onClose() {
     _activeLiveTranscript?.dispose();
     _audioRecorderService.dispose();
+    _sherpaOnnxService.dispose();
     super.onClose();
   }
 }

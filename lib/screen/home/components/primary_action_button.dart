@@ -33,12 +33,12 @@ class PrimaryActionButton extends GetView<HomeController> {
         );
       }
 
-      final isWhisperLoading = controller.isWhisperModelLoading.value;
+      final isAsrLoading = controller.isAsrModelLoading.value;
       final isStartDisabled =
-          isProcessing || isWhisperLoading || !controller.isWhisperModelReady.value;
+          isProcessing || isAsrLoading || !controller.isAsrModelReady.value;
 
       return Opacity(
-        opacity: isWhisperLoading ? 0.45 : 1.0,
+        opacity: isAsrLoading ? 0.45 : 1.0,
         child: _ActionButton(
           labelKey: StringKeys.homeStartCaptioning,
           icon: Icons.mic,

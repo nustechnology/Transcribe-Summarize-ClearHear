@@ -36,6 +36,10 @@ migrate_working_dir/
 # Native ML vendored sources (fetched by tool/setup_flutter_llama_android.sh)
 /third_party/llama.cpp/
 
+# Sherpa ONNX streaming model (fetched by tool/setup_sherpa_model.sh)
+/assets/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10/
+/assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/
+
 # FVM
 
 # Symbolication related
