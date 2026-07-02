@@ -1,69 +1,59 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 
 import 'audio_recorder_service.dart';
-import 'whisper_service.dart';
+import 'sherpa_onnx_service.dart';
 
-/// Records microphone audio, then transcribes once when [finish] is called.
+typedef LiveTranscriptCallback = void Function(String fullText);
+
+/// Realtime on-device captioning with sherpa_onnx streaming ASR.
 class LiveTranscriptService {
   LiveTranscriptService({
     required AudioRecorderService audioRecorderService,
-    required WhisperService whisperService,
+    required SherpaOnnxService sherpaOnnxService,
   })  : _audioRecorderService = audioRecorderService,
-        _whisperService = whisperService;
+        _sherpaOnnxService = sherpaOnnxService;
 
   final AudioRecorderService _audioRecorderService;
-  final WhisperService _whisperService;
+  final SherpaOnnxService _sherpaOnnxService;
 
   bool _isActive = false;
 
-  Future<void> start() async {
+  Future<void> start({required LiveTranscriptCallback onUpdate}) async {
     if (_isActive) return;
 
+    await _sherpaOnnxService.ensureModelReady();
+    _sherpaOnnxService.startSession();
     _isActive = true;
-    await _audioRecorderService.startRecording();
+
+    await _audioRecorderService.startStreaming(
+      onChunk: (chunk) {
+        if (!_isActive) return;
+        final text = _sherpaOnnxService.processPcmChunk(chunk);
+        if (text.isNotEmpty) {
+          onUpdate(text);
+        }
+      },
+    );
   }
 
-  /// Stop recording and return the final transcript.
-  Future<String> finish() async {
+  /// Stop streaming and return the final caption text.
+  Future<String> finish({LiveTranscriptCallback? onUpdate}) async {
     _isActive = false;
 
-    String? audioPath;
     try {
-      audioPath = await _audioRecorderService.stopRecording();
+      await _audioRecorderService.stopStreaming();
     } catch (error, stackTrace) {
-      debugPrint('[LiveTranscript] stop recording failed: $error');
+      debugPrint('[LiveTranscript] stop streaming failed: $error');
       debugPrint('$stackTrace');
-      return '';
     }
 
-    if (audioPath == null || audioPath.isEmpty) {
-      debugPrint('[LiveTranscript] no audio captured');
-      return '';
+    final result = _sherpaOnnxService.finishSession();
+    if (result.isNotEmpty) {
+      onUpdate?.call(result);
     }
 
-    try {
-      await _whisperService.ensureModelReady();
-      final text = await _whisperService.transcribeRecording(audioPath);
-      final result = text.trim();
-      debugPrint('[LiveTranscript] finished:\n$result');
-      return result;
-    } catch (error, stackTrace) {
-      debugPrint('[LiveTranscript] final pass failed: $error');
-      debugPrint('$stackTrace');
-      return '';
-    } finally {
-      await _deleteQuietly(File(audioPath));
-    }
-  }
-
-  Future<void> _deleteQuietly(File file) async {
-    try {
-      if (await file.exists()) {
-        await file.delete();
-      }
-    } catch (_) {}
+    debugPrint('[LiveTranscript] finished:\n$result');
+    return result;
   }
 
   void dispose() {

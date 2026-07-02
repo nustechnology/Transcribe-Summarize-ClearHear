@@ -5,15 +5,57 @@ import '../../../lang/string_keys.dart';
 import '../../../style/theme.dart';
 import '../controllers/home_controller.dart';
 
-class TranscriptCard extends GetView<HomeController> {
-  const TranscriptCard();
+class TranscriptCard extends StatefulWidget {
+  const TranscriptCard({super.key});
+
+  @override
+  State<TranscriptCard> createState() => _TranscriptCardState();
+}
+
+class _TranscriptCardState extends State<TranscriptCard> {
+  final ScrollController _scrollController = ScrollController();
+  Worker? _transcriptWorker;
+  Worker? _summaryWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    final controller = Get.find<HomeController>();
+    _transcriptWorker = ever(controller.transcript, (_) => _scrollToBottom());
+    _summaryWorker = ever(controller.summary, (_) => _scrollToBottom());
+  }
+
+  @override
+  void dispose() {
+    _transcriptWorker?.dispose();
+    _summaryWorker?.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+
+      final target = _scrollController.position.maxScrollExtent;
+      if (target <= 0) return;
+
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final controller = Get.find<HomeController>();
+
     return Obx(() {
       final isCaptioning = controller.isCaptioning.value;
       final isProcessing = controller.isProcessing.value;
-      final transcript = controller.transcript.value.trim();
+      final transcript = controller.transcript.value;
       final summary = controller.summary.value.trim();
       final statusMessage = controller.statusMessage.value;
       final fontSize = controller.transcriptFontSize.value;
@@ -22,9 +64,13 @@ class TranscriptCard extends GetView<HomeController> {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isCaptioning ? AppColors.surface : AppColors.background.withOpacity(0.5),
+          color: isCaptioning
+              ? AppColors.surface
+              : AppColors.background.withOpacity(0.5),
           borderRadius: BorderRadius.circular(16),
-          border: isCaptioning ? Border.all(color: AppColors.border.withOpacity(0.5)) : null,
+          border: isCaptioning
+              ? Border.all(color: AppColors.border.withOpacity(0.5))
+              : null,
           boxShadow: isCaptioning
               ? [
                   BoxShadow(
@@ -58,8 +104,8 @@ class TranscriptCard extends GetView<HomeController> {
     if (statusMessage.isNotEmpty) {
       return Align(
         alignment: Alignment.topCenter,
-          child: Text(
-            StringKeys.t(statusMessage),
+        child: Text(
+          StringKeys.t(statusMessage),
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontSize: 16,
@@ -72,9 +118,10 @@ class TranscriptCard extends GetView<HomeController> {
 
     if (isCaptioning ||
         isProcessing ||
-        transcript.isNotEmpty ||
+        transcript.trim().isNotEmpty ||
         summary.isNotEmpty) {
       return SingleChildScrollView(
+        controller: _scrollController,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -98,7 +145,7 @@ class TranscriptCard extends GetView<HomeController> {
                   height: 1.4,
                 ),
               )
-            else if (transcript.isNotEmpty)
+            else if (transcript.trim().isNotEmpty)
               Text(
                 transcript,
                 style: TextStyle(

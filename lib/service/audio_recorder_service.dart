@@ -1,19 +1,23 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
-/// Captures microphone audio to a temp file for Whisper (via FFmpeg in whisper_ggml).
+import '../config/ml_model_config.dart';
+
+typedef PcmChunkCallback = void Function(Uint8List chunk);
+
+/// Streams microphone PCM for sherpa_onnx realtime captioning.
 class AudioRecorderService {
   AudioRecorder? _recorder;
-  String? _recordingPath;
-  bool _isRecording = false;
+  StreamSubscription<Uint8List>? _streamSubscription;
+  bool _isStreaming = false;
 
-  /// Same approach as whisper_ggml example: AAC on disk, FFmpeg converts before inference.
-  static const recordConfig = RecordConfig(
-    encoder: AudioEncoder.aacLc,
-    sampleRate: 16000,
+  static const streamConfig = RecordConfig(
+    encoder: AudioEncoder.pcm16bits,
+    sampleRate: MlModelConfig.sherpaSampleRate,
     numChannels: 1,
-    bitRate: 128000,
   );
 
   Future<AudioRecorder> _ensureRecorder() async {
@@ -30,35 +34,31 @@ class AudioRecorderService {
     }
   }
 
-  bool get isRecording => _isRecording;
+  bool get isStreaming => _isStreaming;
 
-  Future<void> startRecording() async {
-    if (_isRecording) return;
+  Future<void> startStreaming({required PcmChunkCallback onChunk}) async {
+    if (_isStreaming) return;
 
     final recorder = await _ensureRecorder();
-    final directory = await getTemporaryDirectory();
-    _recordingPath =
-        '${directory.path}/caption_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
-    await recorder.start(recordConfig, path: _recordingPath!);
-    _isRecording = true;
+    final stream = await recorder.startStream(streamConfig);
+    _streamSubscription = stream.listen(onChunk);
+    _isStreaming = true;
   }
 
-  Future<String?> stopRecording() async {
-    if (!_isRecording) return null;
+  Future<void> stopStreaming() async {
+    _streamSubscription?.cancel();
+    _streamSubscription = null;
 
     final recorder = _recorder;
-    final path = recorder != null ? await recorder.stop() : _recordingPath;
-    _isRecording = false;
-    _recordingPath = null;
-    return path;
+    if (recorder != null && _isStreaming) {
+      await recorder.stop();
+    }
+
+    _isStreaming = false;
   }
 
   Future<void> dispose() async {
-    if (_isRecording) {
-      await stopRecording();
-    }
-
+    await stopStreaming();
     final recorder = _recorder;
     _recorder = null;
     if (recorder != null) {
