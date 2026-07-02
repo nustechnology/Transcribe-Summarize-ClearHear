@@ -36,7 +36,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.6
   get: ^4.6.6
-  flutter_llama: ^1.1.2
+  # flutter_llama: ^1.1.2
   record: ^6.2.1
   path_provider: ^2.1.5
   whisper_ggml: ^1.7.0

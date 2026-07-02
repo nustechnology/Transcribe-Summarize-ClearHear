@@ -88,21 +88,20 @@ class HomeController extends GetxController {
       summary.value = '';
       transcript.value = '';
 
-      final recordingPath = await _audioRecorderService.startRecording();
       isCaptioning.value = true;
 
       _activeLiveTranscript = _createLiveTranscriptService();
-      await _activeLiveTranscript!.start(
-        onUpdate: (fullText) => transcript.value = fullText,
-      );
+      await _activeLiveTranscript!.start();
 
-      debugPrint('[Transcribe] Live recording started: $recordingPath');
+      debugPrint('[Transcribe] Live streaming started');
     } on MissingPluginException {
       debugPrint('[Transcribe] Recorder unavailable (MissingPluginException)');
+      isCaptioning.value = false;
       statusMessage.value = StringKeys.recorderUnavailable;
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Start failed: $error');
       debugPrint('$stackTrace');
+      isCaptioning.value = false;
       statusMessage.value = StringKeys.transcriptionFailed;
       _activeLiveTranscript?.dispose();
       _activeLiveTranscript = null;
@@ -113,19 +112,20 @@ class HomeController extends GetxController {
     if (!isCaptioning.value) return;
 
     isCaptioning.value = false;
-    transcript.value = '';
     summary.value = '';
     isProcessing.value = true;
-    statusMessage.value = StringKeys.homeProcessing;
+    statusMessage.value = '';
 
     try {
       final liveTranscript = _activeLiveTranscript;
       if (liveTranscript == null) {
         debugPrint('[Transcribe] Stop failed: live transcript not active');
+        statusMessage.value = StringKeys.transcriptionFailed;
         return;
       }
 
       final result = await liveTranscript.finish();
+      transcript.value = result;
       debugPrint('[Transcribe] Final transcript:\n$result');
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Stop failed: $error');
@@ -144,7 +144,7 @@ class HomeController extends GetxController {
     if (text.isEmpty || isProcessing.value) return;
 
     isProcessing.value = true;
-    statusMessage.value = StringKeys.homeProcessing;
+    statusMessage.value = '';
     summary.value = '';
 
     try {

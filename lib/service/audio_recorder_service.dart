@@ -2,15 +2,18 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
-/// Records microphone audio as 16 kHz mono WAV for Whisper.
+/// Captures microphone audio to a temp file for Whisper (via FFmpeg in whisper_ggml).
 class AudioRecorderService {
   AudioRecorder? _recorder;
+  String? _recordingPath;
+  bool _isRecording = false;
 
-  static const _recordConfig = RecordConfig(
-    encoder: AudioEncoder.wav,
+  /// Same approach as whisper_ggml example: AAC on disk, FFmpeg converts before inference.
+  static const recordConfig = RecordConfig(
+    encoder: AudioEncoder.aacLc,
     sampleRate: 16000,
     numChannels: 1,
-    bitRate: 256000,
+    bitRate: 128000,
   );
 
   Future<AudioRecorder> _ensureRecorder() async {
@@ -27,38 +30,35 @@ class AudioRecorderService {
     }
   }
 
-  String? _recordingPath;
+  bool get isRecording => _isRecording;
 
-  Future<String> startRecording() async {
-    try {
-      final recorder = await _ensureRecorder();
-      final directory = await getTemporaryDirectory();
-      _recordingPath =
-          '${directory.path}/caption_${DateTime.now().millisecondsSinceEpoch}.wav';
-      await recorder.start(_recordConfig, path: _recordingPath!);
-      return _recordingPath!;
-    } on MissingPluginException {
-      rethrow;
-    }
-  }
+  Future<void> startRecording() async {
+    if (_isRecording) return;
 
-  /// Stop the current segment and immediately start a new one for chunked STT.
-  Future<String?> rotateChunk() async {
-    final recorder = _recorder;
-    if (recorder == null) return null;
+    final recorder = await _ensureRecorder();
+    final directory = await getTemporaryDirectory();
+    _recordingPath =
+        '${directory.path}/caption_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-    final completedPath = await recorder.stop();
-    await startRecording();
-    return completedPath ?? _recordingPath;
+    await recorder.start(recordConfig, path: _recordingPath!);
+    _isRecording = true;
   }
 
   Future<String?> stopRecording() async {
+    if (!_isRecording) return null;
+
     final recorder = _recorder;
-    if (recorder == null) return null;
-    return recorder.stop();
+    final path = recorder != null ? await recorder.stop() : _recordingPath;
+    _isRecording = false;
+    _recordingPath = null;
+    return path;
   }
 
   Future<void> dispose() async {
+    if (_isRecording) {
+      await stopRecording();
+    }
+
     final recorder = _recorder;
     _recorder = null;
     if (recorder != null) {

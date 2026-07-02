@@ -28,7 +28,7 @@ class PrimaryActionButton extends GetView<HomeController> {
               ),
             ),
             const SizedBox(width: 12),
-            _PauseButton(onPressed: () => isProcessing ? null : controller.pauseCaptioning()),
+            _PauseButton(onPressed: () => isProcessing ? null : null),
           ],
         );
       }
