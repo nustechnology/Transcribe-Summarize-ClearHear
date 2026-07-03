@@ -1,60 +1,37 @@
-import 'package:transcribe_summarize_clearhear/shared/models/history_item.dart';
-import 'package:transcribe_summarize_clearhear/shared/models/history_page_result.dart';
-import 'package:transcribe_summarize_clearhear/utils/logger/app_logger.dart';
+import '../../shared/models/history_item.dart';
+import '../../shared/models/history_page_result.dart';
+import '../../shared/models/history_search_hit.dart';
+import '../../shared/models/session_model.dart';
+import '../../utils/logger/app_logger.dart';
+import 'session_repository.dart';
 
-const _snippet =
-    "Lorem Ipsum is simply dummy text of the printing and typesetting industry. "
-    "Lorem Ipsum has been the industry's standard dummy text ever since 1966.";
-
-List<HistoryItem> _seedHistory() {
-  const titles = [
-    'Team standup',
-    'Dr. Okafor — appointment',
-    'Lecture — Linguistics 201',
-    'Client sync',
-    'Therapy session notes',
-    'Product roadmap review',
-  ];
-  const categories = ['meeting', 'health', 'lecture'];
-
-  return List.generate(45, (index) {
-    return HistoryItem(
-      id: 'item-${index + 1}',
-      title: titles[index % titles.length],
-      timestamp: DateTime.now().subtract(Duration(hours: index * 6)),
-      snippet: _snippet,
-      duration: 60 + (index * 30),
-      speakerCount: 1 + (index % 4),
-      category: categories[index % categories.length],
-    );
-  });
-}
-
+/// Adapter that bridges the existing [HistoryController] (which uses
+/// [HistoryItem] + [HistoryPageResult]) to the new [SessionRepository].
+///
+/// This preserves all current controller / UI contracts while
+/// delegating all persistence to the real SQLite implementation.
+///
+/// Migration path: once [HistoryController] is refactored to consume
+/// [SessionModel] directly, this adapter can be removed.
 class HistoryRepository {
-  HistoryRepository();
+  HistoryRepository({required SessionRepository sessionRepository})
+      : _sessionRepository = sessionRepository;
 
-  final List<HistoryItem> _allItems = _seedHistory();
+  final SessionRepository _sessionRepository;
 
-  /// Offset/limit pagination — maps directly to SQLite LIMIT/OFFSET later.
+  /// Delegates to [SessionRepository.getAllSessions] and maps results to
+  /// [HistoryItem] so the existing controller needs no changes.
   Future<HistoryPageResult> fetchSessions({
     required int offset,
     required int limit,
   }) async {
     try {
-      if (offset >= _allItems.length) {
-        return const HistoryPageResult(items: [], hasMore: false);
-      }
-
-      final end = offset + limit;
-      final items = _allItems.sublist(
-        offset,
-        end > _allItems.length ? _allItems.length : end,
+      final result = await _sessionRepository.getAllSessions(
+        offset: offset,
+        limit: limit,
       );
-
-      return HistoryPageResult(
-        items: items,
-        hasMore: end < _allItems.length,
-      );
+      final items = result.items.map(_toHistoryItem).toList();
+      return HistoryPageResult(items: items, hasMore: result.hasMore);
     } catch (error, stackTrace) {
       AppLogger.error(error: error, stackTrace: stackTrace);
       return const HistoryPageResult(items: [], hasMore: false);
@@ -63,10 +40,9 @@ class HistoryRepository {
 
   Future<bool> updateSessionTitle(String id, String newTitle) async {
     try {
-      final index = _allItems.indexWhere((item) => item.id == id);
-      if (index == -1) return false;
-
-      _allItems[index] = _allItems[index].copyWith(title: newTitle);
+      final intId = int.tryParse(id);
+      if (intId == null) return false;
+      await _sessionRepository.updateTitle(id: intId, title: newTitle);
       return true;
     } catch (error, stackTrace) {
       AppLogger.error(error: error, stackTrace: stackTrace);
@@ -74,20 +50,48 @@ class HistoryRepository {
     }
   }
 
-  /// Bulk delete by id — maps to `DELETE FROM history WHERE id IN (...)` later.
+  /// Bulk delete; [ids] are String to match existing controller contract.
   Future<int> deleteSessions(List<String> ids) async {
     try {
-      if (ids.isEmpty) {
-        return 0;
-      }
-
-      final idSet = ids.toSet();
-      final beforeCount = _allItems.length;
-      _allItems.removeWhere((item) => idSet.contains(item.id));
-      return beforeCount - _allItems.length;
+      if (ids.isEmpty) return 0;
+      final intIds = ids.map(int.parse).toList();
+      return _sessionRepository.deleteSessions(intIds);
     } catch (error, stackTrace) {
       AppLogger.error(error: error, stackTrace: stackTrace);
       return 0;
     }
+  }
+
+  Future<List<HistorySearchHit>> searchSessions(String query) async {
+    try {
+      final results = await _sessionRepository.searchSessions(query);
+      return results.map((result) {
+        return HistorySearchHit(
+          item: _toHistoryItem(result.session),
+          titleMatched: result.titleMatched,
+          summaryMatched: result.summaryMatched,
+          transcriptMatched: result.transcriptMatched,
+        );
+      }).toList();
+    } catch (error, stackTrace) {
+      AppLogger.error(error: error, stackTrace: stackTrace);
+      return [];
+    }
+  }
+
+  // ── Mapping ───────────────────────────────────────────────────────────────
+
+  static HistoryItem _toHistoryItem(SessionModel session) {
+    return HistoryItem(
+      id: '${session.id}',
+      title: session.title,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(
+        session.startedAt * 1000,
+      ),
+      snippet: session.summary ?? '',
+      duration: session.durationSec ?? 0,
+      speakerCount: 1,
+      category: 'session',
+    );
   }
 }

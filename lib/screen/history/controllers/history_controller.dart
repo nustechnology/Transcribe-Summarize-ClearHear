@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/history_repository.dart';
 import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/history_item.dart';
+import 'package:transcribe_summarize_clearhear/shared/models/history_search_hit.dart';
 import 'package:transcribe_summarize_clearhear/utils/logger/app_logger.dart';
 import 'package:transcribe_summarize_clearhear/utils/toast/app_toast.dart';
 
@@ -16,12 +17,16 @@ class HistoryController extends GetxController {
 
   final items = <HistoryItem>[].obs;
   final searchQuery = ''.obs;
+  final isSearching = false.obs;
+  final searchResults = <HistorySearchHit>[].obs;
   final isLoading = false.obs;
   final isLoadingMore = false.obs;
   final hasMore = true.obs;
   final isSelectionMode = false.obs;
   final selectedIds = RxSet<String>();
   final isDeleting = false.obs;
+
+  String _lastQuery = '';
 
   int _offset = 0;
 
@@ -36,21 +41,41 @@ class HistoryController extends GetxController {
   }
 
   List<HistoryItem> get filteredItems {
-    final query = searchQuery.value.trim().toLowerCase();
-    if (query.isEmpty) {
-      return items;
+    if (isSearching.value) {
+      return searchResults.map((hit) => hit.item).toList();
     }
-
-    return items.where((item) {
-      return item.title.toLowerCase().contains(query) ||
-          item.snippet.toLowerCase().contains(query);
-    }).toList();
+    return items;
   }
 
   @override
   void onInit() {
     super.onInit();
+    debounce(searchQuery, (_) => _executeSearch(), time: const Duration(milliseconds: 200));
     loadHistory();
+  }
+
+  Future<void> _executeSearch() async {
+    final query = searchQuery.value.trim();
+    if (query.isEmpty) {
+      isSearching.value = false;
+      searchResults.clear();
+      _lastQuery = '';
+      return;
+    }
+
+    if (query == _lastQuery) return;
+    _lastQuery = query;
+
+    isSearching.value = true;
+    final results = await _historyRepository.searchSessions(query);
+    searchResults.assignAll(results);
+  }
+
+  void clearSearch() {
+    searchQuery.value = '';
+    isSearching.value = false;
+    searchResults.clear();
+    _lastQuery = '';
   }
 
   void enterSelectionMode(String itemId) {
@@ -130,6 +155,7 @@ class HistoryController extends GetxController {
     try {
       final deletedCount = await _historyRepository.deleteSessions([id]);
       items.removeWhere((item) => item.id == id);
+      searchResults.removeWhere((hit) => hit.item.id == id);
 
       if (deletedCount > 0) {
         AppToast.success(
@@ -155,7 +181,13 @@ class HistoryController extends GetxController {
     try {
       final deletedCount = await _historyRepository.deleteSessions(ids);
       cancelSelection();
-      await refreshHistory();
+      
+      if (isSearching.value) {
+        searchResults.removeWhere((hit) => ids.contains(hit.item.id));
+        items.removeWhere((item) => ids.contains(item.id));
+      } else {
+        await refreshHistory();
+      }
 
       if (deletedCount > 0) {
         AppToast.success(
@@ -194,7 +226,8 @@ class HistoryController extends GetxController {
     if (!hasMore.value ||
         isLoading.value ||
         isLoadingMore.value ||
-        isSelectionMode.value) {
+        isSelectionMode.value ||
+        isSearching.value) {
       return;
     }
     AppLogger.info(

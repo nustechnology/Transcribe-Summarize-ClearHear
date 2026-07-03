@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
 import 'package:transcribe_summarize_clearhear/screen/history/controllers/history_controller.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/history_item.dart';
+import 'package:transcribe_summarize_clearhear/shared/widgets/highlighted_text.dart';
 import 'package:transcribe_summarize_clearhear/style/app_colors.dart';
 import 'package:transcribe_summarize_clearhear/utils/datetime/datetime_utils.dart';
 
@@ -80,6 +81,7 @@ class HistoryCard extends GetView<HistoryController> {
                               InlineEditableTitle(
                                 initialTitle: item.title,
                                 isSelectionMode: isSelectionMode,
+                                searchKeyword: controller.searchQuery.value,
                                 onSave: (newTitle) =>
                                     controller.updateTitle(item.id, newTitle),
                                 onTapSelectionMode: () =>
@@ -88,7 +90,9 @@ class HistoryCard extends GetView<HistoryController> {
                               const SizedBox(height: 4),
                               Text(
                                 DateTimeUtils.formatSmartTimestamp(
-                                    item.timestamp),
+                                    item.timestamp,
+                                    isFullDateFormat:
+                                        controller.isSearching.value),
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.muted,
@@ -100,8 +104,10 @@ class HistoryCard extends GetView<HistoryController> {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    Text(
-                      item.snippet,
+                    HighlightedText(
+                      text: item.snippet,
+                      keyword: controller.searchQuery.value,
+                      enabled: controller.isSearching.value,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -111,26 +117,10 @@ class HistoryCard extends GetView<HistoryController> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        HistoryMetadataChip(
-                          icon: Icons.access_time,
-                          text: DateTimeUtils.formatDurationFromSeconds(
-                              item.duration),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          width: 1,
-                          height: 14,
-                          color: Colors.grey.withValues(alpha: 0.4),
-                        ),
-                        const SizedBox(width: 10),
-                        HistoryMetadataChip(
-                          icon: Icons.people_alt,
-                          text:
-                              '${item.speakerCount} ${StringKeys.homeSpeakerLabel.tr.toLowerCase()}',
-                        ),
-                      ],
+                    HistoryMetadataChip(
+                      icon: Icons.access_time,
+                      text: DateTimeUtils.formatDurationFromSeconds(
+                          item.duration),
                     ),
                   ],
                 ),
@@ -172,7 +162,6 @@ class HistoryMetadataChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -197,12 +186,14 @@ class InlineEditableTitle extends StatefulWidget {
     super.key,
     required this.initialTitle,
     required this.isSelectionMode,
+    this.searchKeyword = '',
     required this.onSave,
     required this.onTapSelectionMode,
   });
 
   final String initialTitle;
   final bool isSelectionMode;
+  final String searchKeyword;
   final ValueChanged<String> onSave;
   final VoidCallback onTapSelectionMode;
 
@@ -296,8 +287,10 @@ class _InlineEditableTitleState extends State<InlineEditableTitle> {
               });
               _focusNode.requestFocus();
             },
-            child: Text(
-              widget.initialTitle,
+            child: HighlightedText(
+              text: widget.initialTitle,
+              keyword: widget.searchKeyword,
+              enabled: widget.searchKeyword.isNotEmpty,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               softWrap: false,

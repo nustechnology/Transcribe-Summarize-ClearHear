@@ -14,6 +14,9 @@ PODS:
     - FlutterMacOS
   - record_ios (1.2.1):
     - Flutter
+  - sqflite_darwin (0.0.4):
+    - Flutter
+    - FlutterMacOS
   - whisper_ggml (1.0.1):
     - Flutter
 
@@ -24,6 +27,7 @@ DEPENDENCIES:
   - fluttertoast (from `.symlinks/plugins/fluttertoast/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - record_ios (from `.symlinks/plugins/record_ios/ios`)
+  - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
   - whisper_ggml (from `.symlinks/plugins/whisper_ggml/ios`)
 
 EXTERNAL SOURCES:
@@ -39,6 +43,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
   record_ios:
     :path: ".symlinks/plugins/record_ios/ios"
+  sqflite_darwin:
+    :path: ".symlinks/plugins/sqflite_darwin/darwin"
   whisper_ggml:
     :path: ".symlinks/plugins/whisper_ggml/ios"
 
@@ -49,6 +55,7 @@ SPEC CHECKSUMS:
   fluttertoast: 2c67e14dce98bbdb200df9e1acf610d7a6264ea1
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   record_ios: 980fd386a97a35987d0fce3dfda4b26a38c90f4c
+  sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   whisper_ggml: 383283d526f6c91024c16bf65b707cc08568a685
 
 PODFILE CHECKSUM: aa9258622ae5fac53cf94c5df3fc39f03e4d4820

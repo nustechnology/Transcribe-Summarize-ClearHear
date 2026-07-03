@@ -38,7 +38,7 @@
   "home_demo_time": "9:41 AM",
   "nav_summary": "Summary",
   "home_summarize": "Summarize",
-  "history_search_hint": "Search transcripts",
+  "history_search_hint": "Search by title or text...",
   "history_no_results": "No saved sessions found.",
   "history_secure_note": "Transcripts are stored securely on your device.",
   "history_items_selected": "@count items selected",

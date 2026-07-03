@@ -1,7 +1,8 @@
 import 'package:intl/intl.dart';
 
 class DateTimeUtils {
-  static String formatSmartTimestamp(DateTime dateTime) {
+  static String formatSmartTimestamp(DateTime dateTime,
+      {bool isFullDateFormat = false}) {
     final now = DateTime.now();
 
     final today = DateTime(now.year, now.month, now.day);
@@ -12,6 +13,11 @@ class DateTimeUtils {
     final fullDateFormat = DateFormat('MMM d, yyyy');
 
     String time = timeFormat.format(dateTime);
+
+    if (isFullDateFormat) {
+      final date = fullDateFormat.format(dateTime);
+      return '$date • $time';
+    }
 
     // 🟢 Today
     if (inputDate == today) {

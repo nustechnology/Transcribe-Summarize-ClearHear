@@ -9,10 +9,12 @@ import ffmpeg_kit_flutter_new_min
 import flutter_llama
 import path_provider_foundation
 import record_macos
+import sqflite_darwin
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FFmpegKitFlutterPlugin.register(with: registry.registrar(forPlugin: "FFmpegKitFlutterPlugin"))
   FlutterLlamaPlugin.register(with: registry.registrar(forPlugin: "FlutterLlamaPlugin"))
   PathProviderPlugin.register(with: registry.registrar(forPlugin: "PathProviderPlugin"))
   RecordMacOsPlugin.register(with: registry.registrar(forPlugin: "RecordMacOsPlugin"))
+  SqflitePlugin.register(with: registry.registrar(forPlugin: "SqflitePlugin"))
 }
