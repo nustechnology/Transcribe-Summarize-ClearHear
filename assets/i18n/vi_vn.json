@@ -37,5 +37,20 @@
   "home_demo_transcript_pending": "Chúng ta sẽ sẵn sàng cho buổi thực địa...",
   "home_demo_time": "9:41 SA",
   "nav_summary": "Tóm tắt",
-  "home_summarize": "Tóm tắt"
+  "home_summarize": "Tóm tắt",
+  "history_search_hint": "Tìm theo tiêu đề hoặc nội dung...",
+  "history_no_results": "Không tìm thấy bản ghi đã lưu.",
+  "history_no_matching_sessions": "Không tìm thấy phiên nào phù hợp.",
+  "history_secure_note": "Bản ghi được lưu an toàn trên thiết bị của bạn.",
+  "history_items_selected": "Đã chọn @count mục",
+  "history_select_all": "Chọn tất cả",
+  "history_deselect_all": "Bỏ chọn tất cả",
+  "history_cancel": "Hủy",
+  "history_delete_confirm_title": "Xóa @count bản ghi?",
+  "history_delete_confirm_message": "Bạn có chắc chắn muốn xóa vĩnh viễn (các) bản ghi đã chọn không?",
+  "history_delete_confirm_action": "Xóa",
+  "history_delete_success": "Đã xóa @count bản ghi",
+  "datetime_today": "Hôm nay",
+  "datetime_yesterday": "Hôm qua",
+  "something_went_wrong": "Đã xảy ra lỗi. Vui lòng thử lại."
 }
