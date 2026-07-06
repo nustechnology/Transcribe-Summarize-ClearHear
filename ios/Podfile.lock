@@ -1,0 +1,31 @@
+PODS:
+  - Flutter (1.0.0)
+  - flutter_llama (1.0.0):
+    - Flutter
+  - whisper_kit (0.0.1):
+    - Flutter
+    - whisper_kit/EnhancedAudio (= 0.0.1)
+  - whisper_kit/EnhancedAudio (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - flutter_llama (from `.symlinks/plugins/flutter_llama/ios`)
+  - whisper_kit (from `.symlinks/plugins/whisper_kit/ios`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  flutter_llama:
+    :path: ".symlinks/plugins/flutter_llama/ios"
+  whisper_kit:
+    :path: ".symlinks/plugins/whisper_kit/ios"
+
+SPEC CHECKSUMS:
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_llama: 6e228198f708bc58cf75eabc96f0c5d0eedaced7
+  whisper_kit: a3d6076cab694aa0ed1f813fd663ef4099ca0af9
+
+PODFILE CHECKSUM: 4186260aa218c7e1f90232f65c0066bbcf7597dc
+
+COCOAPODS: 1.16.2
