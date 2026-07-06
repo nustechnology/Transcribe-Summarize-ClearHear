@@ -8,6 +8,7 @@
   "home_idle_prompt_line1": "Nhấn Bắt đầu phụ đề",
   "home_idle_prompt_line2": "để bắt đầu nghe.",
   "home_start_captioning": "Bắt đầu phụ đề",
+  "home_loading_model": "Đang tải mô hình",
   "home_stop_captioning": "Dừng phụ đề",
   "home_stop_captioning_paused": "Phụ đề đã tạm dừng",
   "home_resume_captioning": "Tiếp tục",

@@ -157,8 +157,11 @@ class HomeController extends GetxController {
   }
 
   Future<void> _finishInBackground(LiveTranscriptService liveTranscript) async {
+    isProcessing.value = true;
+    statusMessage.value = '';
     try {
       final result = await liveTranscript.finish();
+      transcript.value = result.text;
       debugPrint(
         '[Transcribe] Stop complete '
         '(${result.segments.length} segments, whisper=${result.usedWhisper})',
@@ -170,10 +173,15 @@ class HomeController extends GetxController {
           'whisper="${segment.whisperText}" wav=${segment.wavPath}',
         );
       }
+      if (result.text.trim().isEmpty) {
+        statusMessage.value = StringKeys.transcriptionFailed;
+      }
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Stop failed: $error');
       debugPrint('$stackTrace');
+      statusMessage.value = StringKeys.transcriptionFailed;
     } finally {
+      isProcessing.value = false;
       liveTranscript.dispose();
     }
   }

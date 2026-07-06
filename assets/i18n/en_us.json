@@ -8,6 +8,7 @@
   "home_idle_prompt_line1": "Tap Start captioning",
   "home_idle_prompt_line2": "to begin listening.",
   "home_start_captioning": "Start captioning",
+  "home_loading_model": "Loading model",
   "home_stop_captioning": "Stop captioning",
   "home_stop_captioning_paused": "Captioning paused",
   "home_resume_captioning": "Resume",

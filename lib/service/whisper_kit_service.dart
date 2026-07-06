@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:whisper_kit/whisper_kit.dart';
 
 import '../config/ml_model_config.dart';
 import '../model/conversation_segment.dart';
 import '../util/asr_text_util.dart';
+import '../util/pcm_audio_util.dart';
+import '../util/wav_util.dart';
 
 /// Offline transcription of saved conversation segments via [whisper_kit].
 class WhisperKitService {
@@ -50,16 +54,36 @@ class WhisperKitService {
       throw StateError('WhisperKit model is not ready');
     }
 
+    final wavFile = File(wavPath);
+    if (!await wavFile.exists()) {
+      throw StateError('WAV file not found: $wavPath');
+    }
+
+    final wavBytes = await wavFile.length();
+    final durationSec = durationSecondsForPcm16(
+      wavBytes > wavHeaderSize ? wavBytes - wavHeaderSize : 0,
+      sampleRate: MlModelConfig.audioSampleRate,
+    );
+    debugPrint(
+      '[WhisperKit] transcribing $wavPath '
+      '(${durationSec.toStringAsFixed(2)}s, $wavBytes bytes)',
+    );
+
     final result = await whisper.transcribe(
       transcribeRequest: TranscribeRequest(
         audio: wavPath,
         language: MlModelConfig.whisperLanguage,
         isNoTimestamps: true,
+        isVerbose: kDebugMode,
         threads: MlModelConfig.whisperThreads,
       ),
     );
 
-    return formatAsrText(result.text);
+    final text = _extractTranscriptText(result);
+    if (text.isEmpty) {
+      debugPrint('[WhisperKit] empty transcript for $wavPath');
+    }
+    return formatAsrText(text);
   }
 
   /// Transcribes each saved segment and returns the combined transcript.
@@ -107,4 +131,17 @@ WhisperModel _resolveWhisperModel(String name) {
     default:
       return WhisperModel.tiny;
   }
+}
+
+String _extractTranscriptText(WhisperTranscribeResponse result) {
+  final direct = result.text.trim();
+  if (direct.isNotEmpty) return direct;
+
+  final segments = result.segments;
+  if (segments == null || segments.isEmpty) return '';
+
+  return segments
+      .map((segment) => segment.text.trim())
+      .where((text) => text.isNotEmpty)
+      .join(' ');
 }

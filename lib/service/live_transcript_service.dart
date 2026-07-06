@@ -66,7 +66,7 @@ class LiveTranscriptService {
       debugPrint('$stackTrace');
     }
 
-    await _commitOpenSegment();
+    await _commitOpenSegment(force: true);
     final result = await _transcribePendingSegments();
 
     debugPrint(
@@ -108,7 +108,7 @@ class LiveTranscriptService {
       }
     }
 
-    await _commitOpenSegment();
+    await _commitOpenSegment(force: true);
     final result = await _transcribePendingSegments();
 
     debugPrint(
@@ -174,8 +174,8 @@ class LiveTranscriptService {
     );
   }
 
-  Future<void> _commitOpenSegment() async {
-    final segment = await _segmentCapture.commitCurrent();
+  Future<void> _commitOpenSegment({bool force = false}) async {
+    final segment = await _segmentCapture.commitCurrent(force: force);
     if (segment != null) {
       debugPrint(
         '[LiveTranscript] saved segment ${segment.id}: ${segment.wavPath}',

@@ -5,12 +5,15 @@ abstract final class MlModelConfig {
   /// Trailing silence (seconds) before a speech segment is committed.
   static const pauseSilenceSeconds = 1.2;
 
-  /// Minimum PCM bytes before saving a conversation segment (~0.4s at 16kHz).
-  static const minSegmentPcmBytes = 12800;
+  /// Minimum PCM bytes before saving a conversation segment (~0.8s at 16kHz).
+  static const minSegmentPcmBytes = 25600;
+
+  /// Lower threshold when flushing the final open buffer on pause/stop.
+  static const minFinishSegmentPcmBytes = 9600;
 
   /// Offline segment transcription via [whisper_kit] (whisper.cpp).
   static const whisperModelName = 'tiny';
-  static const whisperLanguage = 'auto';
+  static const whisperLanguage = 'en';
   static const whisperThreads = 2;
 
   /// Summarization: Qwen2.5-0.5B via flutter_llama.

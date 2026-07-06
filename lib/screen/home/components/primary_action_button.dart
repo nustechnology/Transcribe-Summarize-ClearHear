@@ -76,9 +76,12 @@ class PrimaryActionButton extends GetView<HomeController> {
       return Opacity(
         opacity: isAsrLoading ? 0.45 : 1.0,
         child: _ActionButton(
-          labelKey: StringKeys.homeStartCaptioning,
-          icon: Icons.mic,
+          labelKey: isAsrLoading
+              ? StringKeys.homeLoadingModel
+              : StringKeys.homeStartCaptioning,
+          icon: isAsrLoading ? Icons.download_rounded : Icons.mic,
           filled: true,
+          loadingDots: isAsrLoading,
           onPressed: isStartDisabled ? null : controller.startCaptioning,
         ),
       );
@@ -96,6 +99,7 @@ class _ActionButton extends StatelessWidget {
     this.foregroundColor,
     this.borderColor,
     this.compact = false,
+    this.loadingDots = false,
   });
 
   final String labelKey;
@@ -106,6 +110,7 @@ class _ActionButton extends StatelessWidget {
   final Color? foregroundColor;
   final Color? borderColor;
   final bool compact;
+  final bool loadingDots;
 
   @override
   Widget build(BuildContext context) {
@@ -147,10 +152,61 @@ class _ActionButton extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (loadingDots)
+                _AnimatedEllipsis(
+                  style: TextStyle(
+                    color: fgColor,
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AnimatedEllipsis extends StatefulWidget {
+  const _AnimatedEllipsis({required this.style});
+
+  final TextStyle style;
+
+  @override
+  State<_AnimatedEllipsis> createState() => _AnimatedEllipsisState();
+}
+
+class _AnimatedEllipsisState extends State<_AnimatedEllipsis>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final dotCount = (_controller.value * 3).floor() % 3 + 1;
+        return SizedBox(
+          width: 18,
+          child: Text('.' * dotCount, style: widget.style),
+        );
+      },
     );
   }
 }
