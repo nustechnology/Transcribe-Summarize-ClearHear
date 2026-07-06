@@ -8,10 +8,35 @@ import '../controllers/home_controller.dart';
 class StatusBar extends GetView<HomeController> {
   const StatusBar({super.key});
 
+  String _getStatusText(HomeController controller) {
+    if (controller.isCaptioning.value) {
+      return controller.isPaused.value
+          ? StringKeys.homeStatusPaused.tr
+          : StringKeys.homeStatusListening.tr;
+    }
+    return StringKeys.homeStatusIdle.tr;
+  }
+
+  Color _getStatusColor(HomeController controller) {
+    if (controller.isCaptioning.value) {
+      return controller.isPaused.value
+          ? AppColors.stopRed
+          : AppColors.statusActive;
+    }
+    return AppColors.statusIdle;
+  }
+
+  Color _getStatusTextColor(HomeController controller) {
+    return controller.isCaptioning.value
+        ? AppColors.primary
+        : AppColors.textMuted;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
       final isActive = controller.isCaptioning.value;
+      final isPaused = controller.isPaused.value;
 
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -29,22 +54,33 @@ class StatusBar extends GetView<HomeController> {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: isActive ? AppColors.statusActive : AppColors.statusIdle,
+                    color: _getStatusColor(controller),
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  isActive
-                      ? StringKeys.homeStatusListening.tr
-                      : StringKeys.homeStatusIdle.tr,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isActive ? AppColors.primary : AppColors.textMuted,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getStatusText(controller),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _getStatusTextColor(controller),
+                      ),
+                    ),
+                    if (isPaused)
+                      Text(
+                        StringKeys.homeStopCaptioningPaused.tr,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                  ],
                 ),
-                if (isActive) ...[
+                if (isActive && !isPaused) ...[
                   const SizedBox(width: 8),
                   Container(
                     width: 22,
@@ -70,10 +106,18 @@ class StatusBar extends GetView<HomeController> {
                 ],
               ],
             ),
-            _FontSizeControl(
-              onDecrease: controller.decreaseFontSize,
-              onIncrease: controller.increaseFontSize,
-            ),
+            isPaused
+                ? Text(
+                    StringKeys.homeStopCaptioningPaused.tr,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
+                    ),
+                  )
+                : _FontSizeControl(
+                    onDecrease: controller.decreaseFontSize,
+                    onIncrease: controller.increaseFontSize,
+                  ),
           ],
         ),
       );

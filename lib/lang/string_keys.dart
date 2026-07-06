@@ -7,12 +7,15 @@ abstract class StringKeys {
   static const appTitle = 'app_title';
   static const homeStatusIdle = 'home_status_idle';
   static const homeStatusActive = 'home_status_active';
+  static const homeStatusPaused = 'home_status_paused';
   static const homeSpeakerLabel = 'home_speaker_label';
   static const homePlaceholderTranscript = 'home_placeholder_transcript';
   static const homeIdlePromptLine1 = 'home_idle_prompt_line1';
   static const homeIdlePromptLine2 = 'home_idle_prompt_line2';
   static const homeStartCaptioning = 'home_start_captioning';
   static const homeStopCaptioning = 'home_stop_captioning';
+  static const homeStopCaptioningPaused = 'home_stop_captioning_paused';
+  static const homeResumeCaptioning = 'home_resume_captioning';
   static const homeStop = 'home_stop';
   static const homeListening = 'home_listening';
   static const homeProcessing = 'home_processing';

@@ -5,25 +5,14 @@ import '../../../lang/string_keys.dart';
 import '../../../style/theme.dart';
 import '../controllers/home_controller.dart';
 
-class TranscriptCard extends GetView<HomeController> {
+class TranscriptCard extends StatefulWidget {
   const TranscriptCard({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return _TranscriptCardBody(controller: controller);
-  }
+  State<TranscriptCard> createState() => _TranscriptCardState();
 }
 
-class _TranscriptCardBody extends StatefulWidget {
-  const _TranscriptCardBody({required this.controller});
-
-  final HomeController controller;
-
-  @override
-  State<_TranscriptCardBody> createState() => _TranscriptCardBodyState();
-}
-
-class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
+class _TranscriptCardState extends State<TranscriptCard> {
   final ScrollController _scrollController = ScrollController();
   Worker? _transcriptWorker;
   Worker? _summaryWorker;
@@ -31,9 +20,9 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
   @override
   void initState() {
     super.initState();
-    _transcriptWorker =
-        ever(widget.controller.transcript, (_) => _scrollToBottom());
-    _summaryWorker = ever(widget.controller.summary, (_) => _scrollToBottom());
+    final controller = Get.find<HomeController>();
+    _transcriptWorker = ever(controller.transcript, (_) => _scrollToBottom());
+    _summaryWorker = ever(controller.summary, (_) => _scrollToBottom());
   }
 
   @override
@@ -61,18 +50,15 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = widget.controller;
+    final controller = Get.find<HomeController>();
 
     return Obx(() {
       final isCaptioning = controller.isCaptioning.value;
-      final isPaused = controller.isPaused.value;
       final isProcessing = controller.isProcessing.value;
       final transcript = controller.transcript.value;
       final summary = controller.summary.value.trim();
       final statusMessage = controller.statusMessage.value;
       final fontSize = controller.transcriptFontSize.value;
-      final pausedDuration = controller.formattedCaptioningElapsed;
-      final isPausing = controller.isPausing.value;
 
       return Container(
         width: double.infinity,
@@ -80,15 +66,15 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
         decoration: BoxDecoration(
           color: isCaptioning
               ? AppColors.surface
-              : AppColors.background.withValues(alpha: 0.5),
+              : AppColors.background.withOpacity(0.5),
           borderRadius: BorderRadius.circular(16),
           border: isCaptioning
-              ? Border.all(color: AppColors.border.withValues(alpha: 0.5))
+              ? Border.all(color: AppColors.border.withOpacity(0.5))
               : null,
           boxShadow: isCaptioning
               ? [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
+                    color: Colors.black.withOpacity(0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -97,14 +83,11 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
         ),
         child: _buildContent(
           isCaptioning: isCaptioning,
-          isPaused: isPaused,
           isProcessing: isProcessing,
-          isPausing: isPausing,
           transcript: transcript,
           summary: summary,
           statusMessage: statusMessage,
           fontSize: fontSize,
-          pausedDuration: pausedDuration,
         ),
       );
     });
@@ -112,14 +95,11 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
 
   Widget _buildContent({
     required bool isCaptioning,
-    required bool isPaused,
     required bool isProcessing,
-    required bool isPausing,
     required String transcript,
     required String summary,
     required String statusMessage,
     required double fontSize,
-    required String pausedDuration,
   }) {
     if (statusMessage.isNotEmpty) {
       return Align(
@@ -136,71 +116,10 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
       );
     }
 
-    if (isCaptioning || isProcessing || transcript.trim().isNotEmpty || summary.isNotEmpty) {
-      if (isPaused) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: _PausedHeader(
-                status: StringKeys.homeStatusPaused.tr,
-                duration: pausedDuration,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      StringKeys.homeSpeakerLabel.tr,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.statusIdle,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (isPausing)
-                      Text(
-                        StringKeys.homeProcessing.tr,
-                        style: TextStyle(
-                          fontSize: fontSize,
-                          fontStyle: FontStyle.italic,
-                          color: AppColors.textSecondary,
-                          height: 1.4,
-                        ),
-                      )
-                    else if (transcript.trim().isNotEmpty)
-                      Text(
-                        transcript,
-                        style: TextStyle(
-                          fontSize: fontSize,
-                          color: AppColors.textPrimary,
-                          height: 1.4,
-                        ),
-                      )
-                    else
-                      Text(
-                        StringKeys.homeListening.tr,
-                        style: TextStyle(
-                          fontSize: fontSize,
-                          fontStyle: FontStyle.italic,
-                          color: AppColors.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
-      }
-
+    if (isCaptioning ||
+        isProcessing ||
+        transcript.trim().isNotEmpty ||
+        summary.isNotEmpty) {
       return SingleChildScrollView(
         controller: _scrollController,
         child: Column(
@@ -310,41 +229,6 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PausedHeader extends StatelessWidget {
-  const _PausedHeader({
-    required this.status,
-    required this.duration,
-  });
-
-  final String status;
-  final String duration;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFF9ED2D0),
-        ),
-      ),
-      child: Text(
-        '$status  •  $duration',
-        style: const TextStyle(
-          fontSize: 14,
-          color: Color(0xFF2C6B73),
-          fontWeight: FontWeight.w500,
-        ),
       ),
     );
   }
