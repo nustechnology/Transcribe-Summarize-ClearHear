@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../model/conversation_segment.dart';
+import '../../../model/transcript_segment_entry.dart';
 import '../../../lang/string_keys.dart';
 import '../../../service/audio_recorder_service.dart';
 import '../../../service/live_transcript_service.dart';
@@ -34,9 +36,11 @@ class HomeController extends GetxController {
 
   final isCaptioning = false.obs;
   final transcript = ''.obs;
+  final transcriptSegments = <TranscriptSegmentEntry>[].obs;
   final summary = ''.obs;
   final isProcessing = false.obs;
   final isPausing = false.obs;
+  final isFinishingTranscript = false.obs;
   final isPaused = false.obs;
   final captioningElapsed = Duration.zero.obs;
   final transcriptFontSize = 20.0.obs;
@@ -95,6 +99,8 @@ class HomeController extends GetxController {
       statusMessage.value = '';
       summary.value = '';
       transcript.value = '';
+      transcriptSegments.clear();
+      isFinishingTranscript.value = false;
       isPaused.value = false;
       isPausing.value = false;
       captioningElapsed.value = Duration.zero;
@@ -131,6 +137,7 @@ class HomeController extends GetxController {
     statusMessage.value = '';
     isPaused.value = false;
     isPausing.value = false;
+    isFinishingTranscript.value = true;
     _stopDurationTimer();
 
     final liveTranscript = _activeLiveTranscript;
@@ -156,12 +163,18 @@ class HomeController extends GetxController {
     }
   }
 
+  void _applyTranscriptResult(LiveTranscriptResult result) {
+    transcript.value = result.text;
+    transcriptSegments.assignAll(
+      transcriptEntriesFromSegments(result.segments),
+    );
+  }
+
   Future<void> _finishInBackground(LiveTranscriptService liveTranscript) async {
-    isProcessing.value = true;
     statusMessage.value = '';
     try {
       final result = await liveTranscript.finish();
-      transcript.value = result.text;
+      _applyTranscriptResult(result);
       debugPrint(
         '[Transcribe] Stop complete '
         '(${result.segments.length} segments, whisper=${result.usedWhisper})',
@@ -173,7 +186,9 @@ class HomeController extends GetxController {
           'whisper="${segment.whisperText}" wav=${segment.wavPath}',
         );
       }
-      if (result.text.trim().isEmpty) {
+      final hasVisibleTranscript =
+          transcriptSegments.isNotEmpty || result.text.trim().isNotEmpty;
+      if (!hasVisibleTranscript) {
         statusMessage.value = StringKeys.transcriptionFailed;
       }
     } catch (error, stackTrace) {
@@ -181,7 +196,7 @@ class HomeController extends GetxController {
       debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionFailed;
     } finally {
-      isProcessing.value = false;
+      isFinishingTranscript.value = false;
       liveTranscript.dispose();
     }
   }
@@ -201,7 +216,7 @@ class HomeController extends GetxController {
       final result = await liveTranscript.pause();
       if (!isCaptioning.value) return;
 
-      transcript.value = result.text;
+      _applyTranscriptResult(result);
       debugPrint(
         '[Transcribe] Paused '
         '(${result.segments.length} segments, whisper=${result.usedWhisper})',
