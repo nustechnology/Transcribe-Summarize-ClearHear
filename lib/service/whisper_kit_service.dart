@@ -110,7 +110,7 @@ class WhisperKitService {
       }
     }
 
-    return lines.join('\n');
+    return joinSegmentTexts(lines);
   }
 
   void dispose() {

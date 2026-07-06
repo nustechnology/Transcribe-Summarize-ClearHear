@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../model/conversation_segment.dart';
+import '../util/asr_text_util.dart';
 import '../util/pcm_silence_detector.dart';
 import 'audio_recorder_service.dart';
 import 'conversation_segment_capture.dart';
@@ -139,10 +140,9 @@ class LiveTranscriptService {
   }
 
   String _combinedDisplayText() {
-    return _segmentCapture.segments
-        .map((segment) => segment.displayText)
-        .where((text) => text.isNotEmpty)
-        .join('\n');
+    return joinSegmentTexts(
+      _segmentCapture.segments.map((segment) => segment.displayText),
+    );
   }
 
   Future<LiveTranscriptResult> _transcribePendingSegments() async {

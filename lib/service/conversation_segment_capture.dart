@@ -64,6 +64,7 @@ class ConversationSegmentCapture {
     final segment = ConversationSegment(
       id: _nextId,
       wavPath: wavPath,
+      recordedAt: DateTime.now(),
       liveText: liveText.trim(),
     );
     _nextId++;
