@@ -29,11 +29,16 @@ class HomeController extends GetxController {
 
   LiveTranscriptService? _activeLiveTranscript;
   Future<void>? _finishFuture;
+  DateTime? _captioningStartedAt;
+  Timer? _durationTimer;
 
   final isCaptioning = false.obs;
   final transcript = ''.obs;
   final summary = ''.obs;
   final isProcessing = false.obs;
+  final isPausing = false.obs;
+  final isPaused = false.obs;
+  final captioningElapsed = Duration.zero.obs;
   final transcriptFontSize = 20.0.obs;
   final statusMessage = ''.obs;
   final isAsrModelReady = false.obs;
@@ -90,6 +95,11 @@ class HomeController extends GetxController {
       statusMessage.value = '';
       summary.value = '';
       transcript.value = '';
+      isPaused.value = false;
+      isPausing.value = false;
+      captioningElapsed.value = Duration.zero;
+      _captioningStartedAt = DateTime.now();
+      _startDurationTimer();
 
       isCaptioning.value = true;
 
@@ -119,6 +129,9 @@ class HomeController extends GetxController {
     isCaptioning.value = false;
     summary.value = '';
     statusMessage.value = '';
+    isPaused.value = false;
+    isPausing.value = false;
+    _stopDurationTimer();
 
     final liveTranscript = _activeLiveTranscript;
     _activeLiveTranscript = null;
@@ -129,10 +142,6 @@ class HomeController extends GetxController {
     }
 
     _scheduleFinish(liveTranscript);
-  }
-
-  Future<void> pauseCaptioning() async {
-    // TODO: Implement pause captioning
   }
 
   void _scheduleFinish(LiveTranscriptService liveTranscript) {
@@ -167,6 +176,82 @@ class HomeController extends GetxController {
     } finally {
       liveTranscript.dispose();
     }
+  }
+
+  Future<void> pauseCaptioning() async {
+    if (!isCaptioning.value || isPaused.value || isPausing.value) return;
+
+    final liveTranscript = _activeLiveTranscript;
+    if (liveTranscript == null) return;
+
+    isPaused.value = true;
+    isPausing.value = true;
+    _stopDurationTimer();
+    statusMessage.value = '';
+
+    try {
+      final result = await liveTranscript.pause();
+      if (!isCaptioning.value) return;
+
+      transcript.value = result.text;
+      debugPrint(
+        '[Transcribe] Paused '
+        '(${result.segments.length} segments, whisper=${result.usedWhisper})',
+      );
+      debugPrint('[Transcribe] Paused text:\n${result.text}');
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Pause failed: $error');
+      debugPrint('$stackTrace');
+      isPaused.value = false;
+      _captioningStartedAt =
+          DateTime.now().subtract(captioningElapsed.value);
+      _startDurationTimer();
+      statusMessage.value = StringKeys.transcriptionFailed;
+    } finally {
+      isPausing.value = false;
+    }
+  }
+
+  Future<void> resumeCaptioning() async {
+    if (!isCaptioning.value || !isPaused.value || isPausing.value) return;
+
+    final liveTranscript = _activeLiveTranscript;
+    if (liveTranscript == null) return;
+
+    try {
+      await liveTranscript.resume();
+      isPaused.value = false;
+      statusMessage.value = '';
+      _captioningStartedAt =
+          DateTime.now().subtract(captioningElapsed.value);
+      _startDurationTimer();
+      debugPrint('[Transcribe] Resumed captioning');
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Resume failed: $error');
+      debugPrint('$stackTrace');
+      statusMessage.value = StringKeys.transcriptionFailed;
+    }
+  }
+
+  void _startDurationTimer() {
+    _durationTimer?.cancel();
+    _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final startedAt = _captioningStartedAt;
+      if (!isCaptioning.value || isPaused.value || startedAt == null) return;
+      captioningElapsed.value = DateTime.now().difference(startedAt);
+    });
+  }
+
+  void _stopDurationTimer() {
+    _durationTimer?.cancel();
+    _durationTimer = null;
+  }
+
+  String get formattedCaptioningElapsed {
+    final totalSeconds = captioningElapsed.value.inSeconds;
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
   Future<void> summarizeTranscript() async {
@@ -224,6 +309,7 @@ class HomeController extends GetxController {
   }
 
   Future<void> _tearDown() async {
+    _stopDurationTimer();
     final active = _activeLiveTranscript;
     if (active != null) {
       _activeLiveTranscript = null;

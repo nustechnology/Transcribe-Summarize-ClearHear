@@ -17,16 +17,17 @@ class AudioVisualizer extends GetView<HomeController> {
   Widget build(BuildContext context) {
     return Obx(() {
       final isActive = controller.isCaptioning.value;
+      final isPaused = controller.isPaused.value;
 
-      if (!isActive) {
+      if (!isActive || isPaused) {
         return Row(
           children: [
             const Icon(
-              Icons.mic_none,
-              size: 20,
-              color: AppColors.textMuted,
+              Icons.mic,
+              size: 24,
+              color: AppColors.textSecondary,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: Row(
                 children: List.generate(_barCount, (_) {
