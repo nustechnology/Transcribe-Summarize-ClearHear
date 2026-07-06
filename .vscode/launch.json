@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ClearHear (iOS)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "iPhone 16 Pro"
+    },
+    {
+      "name": "ClearHear (Android)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "android"
+    }
+  ]
+}
