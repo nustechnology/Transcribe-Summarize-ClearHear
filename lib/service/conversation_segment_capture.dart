@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../config/ml_model_config.dart';
 import '../model/conversation_segment.dart';
+import '../util/pcm_audio_util.dart';
 import '../util/wav_util.dart';
 
 /// Buffers PCM per utterance and writes WAV files when a speech pause is detected.
@@ -34,18 +36,30 @@ class ConversationSegmentCapture {
   }
 
   /// Saves the current utterance buffer as a WAV segment.
-  Future<ConversationSegment?> commitCurrent({String liveText = ''}) async {
+  Future<ConversationSegment?> commitCurrent({
+    String liveText = '',
+    bool force = false,
+  }) async {
     final sessionDir = _sessionDir;
-    if (sessionDir == null || _current.length < MlModelConfig.minSegmentPcmBytes) {
+    final minBytes = force
+        ? MlModelConfig.minFinishSegmentPcmBytes
+        : MlModelConfig.minSegmentPcmBytes;
+    if (sessionDir == null || _current.length < minBytes) {
       _current.clear();
       return null;
     }
 
-    final pcm = _current.toBytes();
+    final pcm = normalizePcm16(_current.toBytes());
     _current.clear();
 
     final wavPath = '$sessionDir/segment_${_nextId.toString().padLeft(3, '0')}.wav';
     await File(wavPath).writeAsBytes(buildWavFromPcm16(pcm), flush: true);
+
+    debugPrint(
+      '[SegmentCapture] segment $_nextId '
+      '${durationSecondsForPcm16(pcm.length).toStringAsFixed(2)}s '
+      'rms=${rmsPcm16(pcm).toStringAsFixed(0)}',
+    );
 
     final segment = ConversationSegment(
       id: _nextId,

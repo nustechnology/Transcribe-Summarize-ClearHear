@@ -13,6 +13,7 @@ abstract class StringKeys {
   static const homeIdlePromptLine1 = 'home_idle_prompt_line1';
   static const homeIdlePromptLine2 = 'home_idle_prompt_line2';
   static const homeStartCaptioning = 'home_start_captioning';
+  static const homeLoadingModel = 'home_loading_model';
   static const homeStopCaptioning = 'home_stop_captioning';
   static const homeStopCaptioningPaused = 'home_stop_captioning_paused';
   static const homeResumeCaptioning = 'home_resume_captioning';
