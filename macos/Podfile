@@ -1,0 +1,91 @@
+platform :osx, '10.14'
+
+require 'fileutils'
+
+# flutter_llama: copy xcframework headers so llama.h can #include "ggml.h" beside it.
+def patch_flutter_llama_headers!
+  plugin_root = File.expand_path(File.join('.symlinks', 'plugins', 'flutter_llama'), __dir__)
+  plugin_ios = File.join(plugin_root, 'ios')
+  return unless File.directory?(plugin_ios)
+
+  headers_src = File.join(
+    plugin_ios,
+    'llama.xcframework',
+    'ios-arm64_x86_64-simulator',
+    'llama.framework',
+    'Headers'
+  )
+  unless File.directory?(headers_src)
+    headers_src = File.join(
+      plugin_ios,
+      'llama.xcframework',
+      'macos-arm64_x86_64',
+      'llama.framework',
+      'Headers'
+    )
+  end
+  return unless File.directory?(headers_src)
+
+  include_dir = File.join(plugin_root, 'llama.cpp', 'include')
+  ggml_include_dir = File.join(plugin_root, 'llama.cpp', 'ggml', 'include')
+  FileUtils.mkdir_p(include_dir)
+  FileUtils.mkdir_p(ggml_include_dir)
+
+  Dir.children(headers_src).each do |name|
+    src = File.join(headers_src, name)
+    next unless File.file?(src)
+
+    if name.start_with?('ggml')
+      FileUtils.cp(src, File.join(ggml_include_dir, name))
+      FileUtils.cp(src, File.join(include_dir, name))
+    else
+      FileUtils.cp(src, File.join(include_dir, name))
+    end
+  end
+end
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'ephemeral', 'Flutter-Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure \"flutter pub get\" is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Flutter-Generated.xcconfig, then run \"flutter pub get\""
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_macos_podfile_setup
+
+pre_install do |_installer|
+  patch_flutter_llama_headers!
+end
+
+target 'Runner' do
+  use_frameworks!
+
+  flutter_install_all_macos_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  patch_flutter_llama_headers!
+  installer.pods_project.targets.each do |target|
+    flutter_additional_macos_build_settings(target)
+  end
+end

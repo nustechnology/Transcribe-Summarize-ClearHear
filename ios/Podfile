@@ -1,0 +1,145 @@
+# Uncomment this line to define a global platform for your project
+platform :ios, '15.6'
+
+require 'fileutils'
+
+# flutter_llama on pub.dev ships static libs but omits llama.cpp headers.
+# Copy them from the bundled xcframework before Xcode compiles the plugin.
+def patch_flutter_llama_headers!
+  plugin_root = File.expand_path(File.join('.symlinks', 'plugins', 'flutter_llama'), __dir__)
+  plugin_ios = File.join(plugin_root, 'ios')
+  return unless File.directory?(plugin_ios)
+
+  headers_src = File.join(
+    plugin_ios,
+    'llama.xcframework',
+    'ios-arm64_x86_64-simulator',
+    'llama.framework',
+    'Headers'
+  )
+  unless File.directory?(headers_src)
+    headers_src = File.join(
+      plugin_ios,
+      'llama.xcframework',
+      'ios-arm64',
+      'llama.framework',
+      'Headers'
+    )
+  end
+  return unless File.directory?(headers_src)
+
+  include_dir = File.join(plugin_root, 'llama.cpp', 'include')
+  ggml_include_dir = File.join(plugin_root, 'llama.cpp', 'ggml', 'include')
+  FileUtils.mkdir_p(include_dir)
+  FileUtils.mkdir_p(ggml_include_dir)
+
+  Dir.children(headers_src).each do |name|
+    src = File.join(headers_src, name)
+    next unless File.file?(src)
+
+    if name.start_with?('ggml')
+      # llama.h uses #include "ggml.h"; with use_frameworks! Xcode hmaps do not
+      # fall back to HEADER_SEARCH_PATHS, so ggml headers must live beside llama.h.
+      FileUtils.cp(src, File.join(ggml_include_dir, name))
+      FileUtils.cp(src, File.join(include_dir, name))
+    else
+      FileUtils.cp(src, File.join(include_dir, name))
+    end
+  end
+end
+
+# ios_libs are device-only arm64; link the bundled xcframework for simulator + device.
+# Must run before flutter_install_all_ios_pods — CocoaPods loads the local spec during
+# dependency resolution, so pre_install is too late on a clean pod install.
+def patch_flutter_llama_podspec!
+  podspec_path = File.expand_path(
+    File.join('.symlinks', 'plugins', 'flutter_llama', 'ios', 'flutter_llama.podspec'),
+    __dir__
+  )
+  return unless File.exist?(podspec_path)
+
+  content = File.read(podspec_path)
+  return if content.include?('PATCHED_FOR_CLEARHEAR')
+
+  unless content.sub!(
+    "  s.vendored_libraries = 'ios_libs/*.a'\n",
+    "  # PATCHED_FOR_CLEARHEAR\n  s.vendored_frameworks = 'llama.xcframework'\n"
+  )
+    raise <<~MSG
+      flutter_llama podspec patch failed: vendored_libraries substitution did not apply.
+      Expected: s.vendored_libraries = 'ios_libs/*.a'
+      File: #{podspec_path}
+    MSG
+  end
+
+  unless content.gsub!(
+    /'OTHER_LDFLAGS' => '\$\(inherited\).*libggml-blas\.a"'/,
+    "'OTHER_LDFLAGS' => '$(inherited)'"
+  )
+    raise <<~MSG
+      flutter_llama podspec patch failed: OTHER_LDFLAGS substitution did not apply.
+      File: #{podspec_path}
+    MSG
+  end
+
+  File.write(podspec_path, content)
+end
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+patch_flutter_llama_podspec!
+
+pre_install do |_installer|
+  patch_flutter_llama_headers!
+end
+
+target 'Runner' do
+  use_frameworks!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  patch_flutter_llama_headers!
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.6'
+
+      if target.name == 'flutter_llama'
+        flags = config.build_settings['OTHER_LDFLAGS'] || '$(inherited)'
+        flags = [flags].flatten.join(' ')
+        unless flags.include?('-framework llama')
+          config.build_settings['OTHER_LDFLAGS'] = "#{flags} -framework llama"
+        end
+      end
+    end
+  end
+end
