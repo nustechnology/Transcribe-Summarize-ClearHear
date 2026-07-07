@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/history_repository.dart';
+import 'package:transcribe_summarize_clearhear/arch/route/app_route.dart';
 import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/history_item.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/history_search_hit.dart';
@@ -268,6 +269,9 @@ class HistoryController extends GetxController {
   void openDetail(String id) {
     if (isSelectionMode.value) return;
     AppLogger.info('Navigate to detail for item $id');
+    Get.rootDelegate.toNamed(
+      AppRoutes.sessionDetailPath(id),
+    );
   }
 
   Future<void> updateTitle(String id, String newTitle) async {

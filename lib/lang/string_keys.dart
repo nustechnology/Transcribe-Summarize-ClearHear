@@ -59,6 +59,31 @@ abstract class StringKeys {
   static const historyDeleteConfirmMessage = 'history_delete_confirm_message';
   static const historyDeleteConfirmAction = 'history_delete_confirm_action';
   static const historyDeleteSuccess = 'history_delete_success';
+  static const historyDetailShare = 'history_detail_share';
+  static const historyDetailDelete = 'history_detail_delete';
+  static const commonRetry = 'commonRetry';
+  static const historyDetailSummaryLabel = 'history_detail_summary_label';
+  static const historyDetailTranscriptLabel = 'history_detail_transcript_label';
+  static const historyDetailNoTranscript = 'history_detail_no_transcript';
+  static const historyDetailOnDevice = 'history_detail_on_device';
+  static const historyDetailPrivate = 'history_detail_private';
+  static const historyDetailPlaceholderSummary =
+      'history_detail_placeholder_summary';
+  static const transcriptHeaderDate = 'transcript_header_date';
+  static const transcriptHeaderDuration = 'transcript_header_duration';
+  static const transcriptHeaderSummary = 'transcript_header_summary';
+  static const transcriptHeaderFullTranscript =
+      'transcript_header_full_transcript';
+  static const historyDetailDeleteSuccess = 'history_detail_delete_success';
+  static const historyDetailShareFailed = 'history_detail_share_failed';
+  static const sessionDetailDeleteConfirmTitle =
+      'session_detail_delete_confirm_title';
+  static const sessionDetailDeleteConfirmMessage =
+      'session_detail_delete_confirm_message';
+  static const sessionDetailDeleteConfirmCancel =
+      'session_detail_delete_confirm_cancel';
+  static const sessionDetailDeleteConfirmDelete =
+      'session_detail_delete_confirm_delete';
   static const datetimeToday = 'datetime_today';
   static const datetimeYesterday = 'datetime_yesterday';
   static const somethingWentWrong = 'something_went_wrong';

@@ -1,5 +1,7 @@
 import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/screen/history/bindings/history_binding.dart';
+import 'package:transcribe_summarize_clearhear/screen/session_details/bindings/session_detail_binding.dart';
+import 'package:transcribe_summarize_clearhear/screen/session_details/session_detail_widget.dart';
 import 'package:transcribe_summarize_clearhear/screen/history/history_widget.dart';
 import 'package:transcribe_summarize_clearhear/screen/home/bindings/home_binding.dart';
 import 'package:transcribe_summarize_clearhear/screen/home/home_widget.dart';
@@ -12,6 +14,9 @@ abstract class AppRoutes {
   static const live = '/live';
   static const history = '/history';
   static const settings = '/settings';
+
+  static const sessionDetail = '/history/detail/:id';
+  static String sessionDetailPath(String id) => '/history/detail/$id';
 }
 
 class AppPages {
@@ -33,6 +38,11 @@ class AppPages {
           name: AppRoutes.history,
           page: () => const HistoryView(),
           binding: HistoryBinding(),
+        ),
+        GetPage(
+          name: AppRoutes.sessionDetail,
+          page: () => const SessionDetailView(),
+          binding: SessionDetailBinding(),
         ),
         GetPage(
           name: AppRoutes.settings,
