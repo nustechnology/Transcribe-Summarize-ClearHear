@@ -6,6 +6,7 @@ import '../../../model/transcript_segment_entry.dart';
 import '../../../style/theme.dart';
 import '../../../util/asr_text_util.dart';
 import '../controllers/home_controller.dart';
+import 'name-avatar.dart';
 
 class TranscriptCard extends GetView<HomeController> {
   const TranscriptCard({super.key});
@@ -75,25 +76,23 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
       final summary = controller.summary.value.trim();
       final statusMessage = controller.statusMessage.value;
       final fontSize = controller.transcriptFontSize.value;
-      final pausedDuration = controller.formattedCaptioningElapsed;
-      final isPausing = controller.isPausing.value;
-      final hasTranscript =
-          transcript.trim().isNotEmpty || transcriptSegments.isNotEmpty;
-      final showActiveCard =
-          isCaptioning || isFinishingTranscript || hasTranscript;
+      final transcriptSpeakers = controller.transcriptSpeakers.value;
+      final isLoadingTranscriptSpeakers = controller.isLoadingTranscript.value;
+      final sessionDuration = controller.sessionDuration.value;
+      final hasFrozenContent = controller.finalizedParagraphs.isNotEmpty;
 
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: showActiveCard
+          color: (isCaptioning || hasFrozenContent)
               ? AppColors.surface
               : AppColors.background.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(16),
-          border: showActiveCard
+          border: (isCaptioning || hasFrozenContent)
               ? Border.all(color: AppColors.border.withValues(alpha: 0.5))
               : null,
-          boxShadow: showActiveCard
+          boxShadow: (isCaptioning || hasFrozenContent)
               ? [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.04),
@@ -108,13 +107,15 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
           isPaused: isPaused,
           isProcessing: isProcessing,
           isFinishingTranscript: isFinishingTranscript,
-          isPausing: isPausing,
           transcript: transcript,
           transcriptSegments: transcriptSegments,
           summary: summary,
           statusMessage: statusMessage,
           fontSize: fontSize,
-          pausedDuration: pausedDuration,
+          transcriptSpeakers: transcriptSpeakers,
+          isLoadingTranscriptSpeakers: isLoadingTranscriptSpeakers,
+          sessionDuration: sessionDuration,
+          hasFrozenContent: hasFrozenContent,
         ),
       );
     });
@@ -125,18 +126,17 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     required bool isPaused,
     required bool isProcessing,
     required bool isFinishingTranscript,
-    required bool isPausing,
     required String transcript,
     required List<TranscriptSegmentEntry> transcriptSegments,
     required String summary,
     required String statusMessage,
     required double fontSize,
-    required String pausedDuration,
+    required List<Map<String, dynamic>> transcriptSpeakers,
+    required bool isLoadingTranscriptSpeakers,
+    required String sessionDuration,
+    required bool hasFrozenContent,
   }) {
-    final hasTranscript =
-        transcript.trim().isNotEmpty || transcriptSegments.isNotEmpty;
-
-    if (statusMessage.isNotEmpty && !hasTranscript) {
+    if (statusMessage.isNotEmpty) {
       return Align(
         alignment: Alignment.topCenter,
         child: Text(
@@ -151,46 +151,153 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
       );
     }
 
-    if (isCaptioning ||
-        isFinishingTranscript ||
-        isProcessing ||
-        hasTranscript ||
-        summary.isNotEmpty) {
-      final transcriptBody = _buildTranscriptScrollContent(
-        isCaptioning: isCaptioning,
-        isPaused: isPaused,
-        isProcessing: isProcessing,
-        isFinishingTranscript: isFinishingTranscript,
-        isPausing: isPausing,
-        transcript: transcript,
-        transcriptSegments: transcriptSegments,
-        summary: summary,
-        fontSize: fontSize,
-        pausedDuration: pausedDuration,
+    // Paused state: show frozen speaker list with duration header.
+    if (isCaptioning && isPaused) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 12),
+            child: Center(
+              child: _PausedHeader(duration: sessionDuration),
+            ),
+          ),
+          Expanded(
+            child: isLoadingTranscriptSpeakers
+                ? const Center(child: CircularProgressIndicator())
+                : transcriptSpeakers.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No transcript yet.',
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemCount: transcriptSpeakers.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 24),
+                        itemBuilder: (context, index) {
+                          final item = transcriptSpeakers[index];
+                          final speaker = item['speaker'] as String;
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              NameAvatar(name: speaker),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      speaker,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: NameAvatar.colorForName(speaker),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      item['message'] as String,
+                                      style: TextStyle(
+                                        fontSize: fontSize,
+                                        color: AppColors.textPrimary,
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Captions are saved locally on your device.',
+            style: TextStyle(fontSize: 13, color: Colors.grey),
+          ),
+        ],
       );
+    }
 
-      if (statusMessage.isNotEmpty) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    // Live captioning or frozen stopped state.
+    if (isCaptioning || hasFrozenContent) {
+      return _LiveCaptionArea(
+        controller: widget.controller,
+        fontSize: fontSize,
+        isProcessing: isProcessing,
+        summary: summary,
+        isFrozen: !isCaptioning,
+      );
+    }
+
+    // Post-stop state: show finalized transcript segments.
+    if (isFinishingTranscript ||
+        transcript.trim().isNotEmpty ||
+        transcriptSegments.isNotEmpty) {
+      return SingleChildScrollView(
+        controller: _scrollController,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              StringKeys.t(statusMessage),
-              textAlign: TextAlign.center,
+              StringKeys.homeSpeakerLabel.tr,
               style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFFE53935),
-                height: 1.4,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.statusIdle,
+                letterSpacing: 0.8,
               ),
             ),
             const SizedBox(height: 12),
-            Expanded(child: transcriptBody),
+            if (isProcessing && summary.isEmpty)
+              Text(
+                StringKeys.homeProcessing.tr,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
+                ),
+              )
+            else
+              _TranscriptSegmentsView(
+                transcript: transcript,
+                transcriptSegments: transcriptSegments,
+                fontSize: fontSize,
+                showProcessingTail: isFinishingTranscript,
+              ),
+            if (summary.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Text(
+                StringKeys.homeSummaryLabel.tr,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.statusIdle,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                summary,
+                style: TextStyle(
+                  fontSize: fontSize - 4,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ],
           ],
-        );
-      }
-
-      return transcriptBody;
+        ),
+      );
     }
 
+    // Idle state.
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -233,118 +340,6 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
       ),
     );
   }
-
-  Widget _buildTranscriptScrollContent({
-    required bool isCaptioning,
-    required bool isPaused,
-    required bool isProcessing,
-    required bool isFinishingTranscript,
-    required bool isPausing,
-    required String transcript,
-    required List<TranscriptSegmentEntry> transcriptSegments,
-    required String summary,
-    required double fontSize,
-    required String pausedDuration,
-  }) {
-    if (isPaused) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: _PausedHeader(
-              status: StringKeys.homeStatusPaused.tr,
-              duration: pausedDuration,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    StringKeys.homeSpeakerLabel.tr,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.statusIdle,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _TranscriptSegmentsView(
-                    transcript: transcript,
-                    transcriptSegments: transcriptSegments,
-                    fontSize: fontSize,
-                    showProcessingTail: isPausing,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return SingleChildScrollView(
-      controller: _scrollController,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            StringKeys.homeSpeakerLabel.tr,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: AppColors.statusIdle,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (isProcessing && summary.isEmpty)
-            Text(
-              StringKeys.homeProcessing.tr,
-              style: TextStyle(
-                fontSize: fontSize,
-                fontStyle: FontStyle.italic,
-                color: AppColors.textSecondary,
-                height: 1.4,
-              ),
-            )
-          else
-            _TranscriptSegmentsView(
-              transcript: transcript,
-              transcriptSegments: transcriptSegments,
-              fontSize: fontSize,
-              showProcessingTail: isFinishingTranscript,
-              showListeningWhenEmpty: isCaptioning && !isPaused,
-            ),
-          if (summary.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            Text(
-              StringKeys.homeSummaryLabel.tr,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.statusIdle,
-                letterSpacing: 0.8,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              summary,
-              style: TextStyle(
-                fontSize: fontSize - 4,
-                color: AppColors.textSecondary,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 }
 
 class _TranscriptSegmentsView extends StatelessWidget {
@@ -353,14 +348,12 @@ class _TranscriptSegmentsView extends StatelessWidget {
     required this.transcriptSegments,
     required this.fontSize,
     this.showProcessingTail = false,
-    this.showListeningWhenEmpty = false,
   });
 
   final String transcript;
   final List<TranscriptSegmentEntry> transcriptSegments;
   final double fontSize;
   final bool showProcessingTail;
-  final bool showListeningWhenEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -370,8 +363,6 @@ class _TranscriptSegmentsView extends StatelessWidget {
       color: AppColors.textSecondary,
       height: 1.4,
     );
-    final listeningStyle = processingStyle;
-
     if (transcriptSegments.isEmpty && !showProcessingTail) {
       if (transcript.trim().isNotEmpty) {
         return _SegmentTranscriptText(
@@ -384,10 +375,6 @@ class _TranscriptSegmentsView extends StatelessWidget {
           fontSize: fontSize,
           showTime: false,
         );
-      }
-
-      if (showListeningWhenEmpty) {
-        return Text(StringKeys.homeListening.tr, style: listeningStyle);
       }
 
       return const SizedBox.shrink();
@@ -412,8 +399,7 @@ class _TranscriptSegmentsView extends StatelessWidget {
             const SizedBox(height: 12),
           ],
           Text(StringKeys.homeProcessing.tr, style: processingStyle),
-        ] else if (transcriptSegments.isEmpty && showListeningWhenEmpty)
-          Text(StringKeys.homeListening.tr, style: listeningStyle),
+        ],
       ],
     );
   }
@@ -478,31 +464,218 @@ class _SegmentTranscriptText extends StatelessWidget {
   }
 }
 
-class _PausedHeader extends StatelessWidget {
-  const _PausedHeader({
-    required this.status,
-    required this.duration,
+/// Live caption area with auto-scroll and partial/final text rendering.
+class _LiveCaptionArea extends StatefulWidget {
+  const _LiveCaptionArea({
+    required this.controller,
+    required this.fontSize,
+    required this.isProcessing,
+    required this.summary,
+    required this.isFrozen,
   });
 
-  final String status;
+  final HomeController controller;
+  final double fontSize;
+  final bool isProcessing;
+  final String summary;
+  final bool isFrozen;
+
+  @override
+  State<_LiveCaptionArea> createState() => _LiveCaptionAreaState();
+}
+
+class _LiveCaptionAreaState extends State<_LiveCaptionArea> {
+  final ScrollController _scrollController = ScrollController();
+  bool _userScrolledUp = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    final atBottom = pos.pixels >= pos.maxScrollExtent - 8;
+    if (atBottom) {
+      _userScrolledUp = false;
+    } else {
+      _userScrolledUp = true;
+    }
+  }
+
+  void _scrollToBottom() {
+    if (_userScrolledUp || !_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels < pos.maxScrollExtent) {
+      _scrollController.animateTo(
+        pos.maxScrollExtent,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          StringKeys.homeSpeakerLabel.tr,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: AppColors.statusIdle,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: _buildScrollableContent(),
+        ),
+        if (widget.summary.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text(
+            StringKeys.homeSummaryLabel.tr,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppColors.statusIdle,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            widget.summary,
+            style: TextStyle(
+              fontSize: widget.fontSize - 4,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildScrollableContent() {
+    return Obx(() {
+      final paragraphs = widget.controller.finalizedParagraphs.toList();
+      // Trigger scroll after frame renders.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+      return CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          // Finalized paragraphs (rendered infrequently).
+          if (paragraphs.isNotEmpty)
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _buildParagraphItem(paragraphs, index),
+                childCount: paragraphs.length,
+              ),
+            ),
+          // Partial text (updates frequently — separate Obx).
+          SliverToBoxAdapter(
+            child: widget.isFrozen
+                ? const SizedBox.shrink()
+                : Obx(() {
+                    final partial =
+                        widget.controller.partialText.value.trim();
+                    // Scroll to bottom whenever partial changes.
+                    WidgetsBinding.instance
+                        .addPostFrameCallback((_) => _scrollToBottom());
+                    if (partial.isEmpty) {
+                      // Show listening indicator so user knows we're active,
+                      // whether paragraphs are empty or not.
+                      return _listeningIndicator();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        partial,
+                        style: TextStyle(
+                          fontSize: widget.fontSize,
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.textSecondary
+                              .withValues(alpha: 0.6),
+                          height: 1.5,
+                        ),
+                      ),
+                    );
+                  }),
+          ),
+          // Bottom padding so last line is not clipped.
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        ],
+      );
+    });
+  }
+
+  Widget _buildParagraphItem(List<String> paragraphs, int index) {
+    if (paragraphs.isEmpty) {
+      return _listeningIndicator();
+    }
+    final text = paragraphs[index];
+    if (text.isEmpty) {
+      // Paragraph break separator.
+      return const SizedBox(height: 16);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: widget.fontSize,
+          color: AppColors.textPrimary,
+          height: 1.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _listeningIndicator() {
+    if (widget.isFrozen) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        StringKeys.homeListening.tr,
+        style: TextStyle(
+          fontSize: widget.fontSize,
+          fontStyle: FontStyle.italic,
+          color: AppColors.textSecondary,
+          height: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
+class _PausedHeader extends StatelessWidget {
+  const _PausedHeader({required this.duration});
+
   final String duration;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFF9ED2D0),
-        ),
+        border: Border.all(color: const Color(0xFF9ED2D0)),
       ),
       child: Text(
-        '$status  •  $duration',
+        'Paused - $duration',
         style: const TextStyle(
           fontSize: 14,
           color: Color(0xFF2C6B73),

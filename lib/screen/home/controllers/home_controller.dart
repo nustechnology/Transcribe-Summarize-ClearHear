@@ -33,6 +33,8 @@ class HomeController extends GetxController {
   Future<void>? _finishFuture;
   DateTime? _captioningStartedAt;
   Timer? _durationTimer;
+  DateTime? _captioningStartTime;
+  Duration _accumulatedDuration = Duration.zero;
 
   final isCaptioning = false.obs;
   final transcript = ''.obs;
@@ -43,10 +45,23 @@ class HomeController extends GetxController {
   final isFinishingTranscript = false.obs;
   final isPaused = false.obs;
   final captioningElapsed = Duration.zero.obs;
+  final isLoadingTranscript = false.obs;
+  final sessionDuration = ''.obs;
   final transcriptFontSize = 20.0.obs;
   final statusMessage = ''.obs;
   final isAsrModelReady = false.obs;
   final isAsrModelLoading = true.obs;
+
+  final transcriptSpeakers = Rx<List<Map<String, dynamic>>>([]);
+
+  /// Live caption state — populated while a session is active or frozen.
+  final finalizedParagraphs = <String>[].obs;
+
+  /// Current in-progress (partial) text being spoken right now.
+  final partialText = ''.obs;
+
+  /// Normalized audio amplitude 0.0–1.0, updated per PCM chunk (~16ms).
+  final audioAmplitude = 0.0.obs;
 
   LiveTranscriptService _createLiveTranscriptService() {
     return _liveTranscriptService ??
@@ -106,11 +121,28 @@ class HomeController extends GetxController {
       captioningElapsed.value = Duration.zero;
       _captioningStartedAt = DateTime.now();
       _startDurationTimer();
+      transcriptSpeakers.value = [];
+      finalizedParagraphs.clear();
+      partialText.value = '';
 
       isCaptioning.value = true;
+      _captioningStartTime = DateTime.now();
+      _accumulatedDuration = Duration.zero;
 
       _activeLiveTranscript = _createLiveTranscriptService();
-      await _activeLiveTranscript!.start();
+      await _activeLiveTranscript!.start(
+        onAmplitude: (amp) => audioAmplitude.value = amp,
+        onPartial: (text) {
+          partialText.value = text;
+        },
+        onFinal: (text, isNewParagraph) {
+          partialText.value = '';
+          if (isNewParagraph && finalizedParagraphs.isNotEmpty) {
+            finalizedParagraphs.add(''); // empty string = paragraph break
+          }
+          finalizedParagraphs.add(text);
+        },
+      );
 
       debugPrint('[Transcribe] Segment recording started');
     } on MissingPluginException {
@@ -139,16 +171,16 @@ class HomeController extends GetxController {
     isPausing.value = false;
     isFinishingTranscript.value = true;
     _stopDurationTimer();
+    audioAmplitude.value = 0.0;
+    finalizedParagraphs.clear();
+    partialText.value = '';
 
     final liveTranscript = _activeLiveTranscript;
     _activeLiveTranscript = null;
 
-    if (liveTranscript == null) {
-      debugPrint('[Transcribe] Stop failed: live transcript not active');
-      return;
+    if (liveTranscript != null) {
+      _scheduleFinish(liveTranscript);
     }
-
-    _scheduleFinish(liveTranscript);
   }
 
   void _scheduleFinish(LiveTranscriptService liveTranscript) {
@@ -202,57 +234,95 @@ class HomeController extends GetxController {
   }
 
   Future<void> pauseCaptioning() async {
-    if (!isCaptioning.value || isPaused.value || isPausing.value) return;
+    if (!isCaptioning.value) return;
 
-    final liveTranscript = _activeLiveTranscript;
-    if (liveTranscript == null) return;
+    // Freeze finalized text, wipe any unfinished partial.
+    partialText.value = '';
+    audioAmplitude.value = 0.0;
 
     isPaused.value = true;
-    isPausing.value = true;
+    isLoadingTranscript.value = true;
+
+    final activeDuration = _accumulatedDuration +
+        (_captioningStartTime != null
+            ? DateTime.now().difference(_captioningStartTime!)
+            : Duration.zero);
+    sessionDuration.value = _formatDuration(activeDuration);
     _stopDurationTimer();
-    statusMessage.value = '';
+
+    final liveTranscript = _activeLiveTranscript;
+    _activeLiveTranscript = null;
+
+    if (liveTranscript == null) {
+      isLoadingTranscript.value = false;
+      return;
+    }
 
     try {
-      final result = await liveTranscript.pause();
-      if (!isCaptioning.value) return;
+      final result = await liveTranscript.finish();
+      transcript.value = result.text;
+      final previousTexts = finalizedParagraphs
+          .where((p) => p.isNotEmpty)
+          .toList();
 
-      _applyTranscriptResult(result);
-      debugPrint(
-        '[Transcribe] Paused '
-        '(${result.segments.length} segments, whisper=${result.usedWhisper})',
-      );
-      debugPrint('[Transcribe] Paused text:\n${result.text}');
+      final currentTexts = result.segments
+          .where((s) => s.displayText.isNotEmpty)
+          .map((s) => s.displayText)
+          .toList();
+
+      final allTexts = [...previousTexts, ...currentTexts];
+      transcriptSpeakers.value = allTexts
+          .asMap()
+          .entries
+          .map((e) => <String, dynamic>{
+                'id': e.key + 1,
+                'speaker': 'Speaker',
+                'message': e.value,
+              })
+          .toList();
     } catch (error, stackTrace) {
-      debugPrint('[Transcribe] Pause failed: $error');
+      debugPrint('[Transcribe] Pause finish failed: $error');
       debugPrint('$stackTrace');
-      isPaused.value = false;
-      _captioningStartedAt =
-          DateTime.now().subtract(captioningElapsed.value);
-      _startDurationTimer();
-      statusMessage.value = StringKeys.transcriptionFailed;
     } finally {
-      isPausing.value = false;
+      isLoadingTranscript.value = false;
+      liveTranscript.dispose();
     }
   }
 
   Future<void> resumeCaptioning() async {
-    if (!isCaptioning.value || !isPaused.value || isPausing.value) return;
+    if (!isCaptioning.value) return;
 
-    final liveTranscript = _activeLiveTranscript;
-    if (liveTranscript == null) return;
+    isPaused.value = false;
+    partialText.value = '';
+    if (_captioningStartTime != null) {
+      _accumulatedDuration += DateTime.now().difference(_captioningStartTime!);
+    }
+    _captioningStartTime = DateTime.now();
+    _captioningStartedAt = DateTime.now().subtract(captioningElapsed.value);
+    _startDurationTimer();
 
+    _activeLiveTranscript = _createLiveTranscriptService();
     try {
-      await liveTranscript.resume();
-      isPaused.value = false;
-      statusMessage.value = '';
-      _captioningStartedAt =
-          DateTime.now().subtract(captioningElapsed.value);
-      _startDurationTimer();
+      await _activeLiveTranscript!.start(
+        onAmplitude: (amp) => audioAmplitude.value = amp,
+        onPartial: (text) {
+          partialText.value = text;
+        },
+        onFinal: (text, isNewParagraph) {
+          partialText.value = '';
+          if (isNewParagraph && finalizedParagraphs.isNotEmpty) {
+            finalizedParagraphs.add('');
+          }
+          finalizedParagraphs.add(text);
+        },
+      );
       debugPrint('[Transcribe] Resumed captioning');
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Resume failed: $error');
       debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionFailed;
+      _activeLiveTranscript?.dispose();
+      _activeLiveTranscript = null;
     }
   }
 
@@ -278,7 +348,11 @@ class HomeController extends GetxController {
   }
 
   Future<void> summarizeTranscript() async {
-    final text = transcript.value.trim();
+    // Compute full transcript from live paragraphs or fallback to transcript.
+    final liveParagraphs =
+        finalizedParagraphs.where((p) => p.isNotEmpty).join('\n');
+    final text =
+        (liveParagraphs.isNotEmpty ? liveParagraphs : transcript.value).trim();
     if (text.isEmpty || isProcessing.value) return;
 
     isProcessing.value = true;
@@ -311,6 +385,12 @@ class HomeController extends GetxController {
         statusMessage.value = '';
       }
     }
+  }
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return d.inHours > 0 ? '${d.inHours}:$m:$s' : '$m:$s';
   }
 
   void increaseFontSize() {
