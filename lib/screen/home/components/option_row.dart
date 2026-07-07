@@ -66,7 +66,6 @@ class _OptionChip extends StatelessWidget {
     required this.icon,
     required this.labelKey,
     this.trailingKey,
-    this.showChevron = false,
     this.iconColor,
     this.trailingColor,
   });
@@ -74,7 +73,6 @@ class _OptionChip extends StatelessWidget {
   final IconData icon;
   final String labelKey;
   final String? trailingKey;
-  final bool showChevron;
   final Color? iconColor;
   final Color? trailingColor;
 
@@ -110,12 +108,6 @@ class _OptionChip extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 color: trailingColor ?? AppColors.confidenceBlue,
               ),
-            ),
-          if (showChevron)
-            const Icon(
-              Icons.keyboard_arrow_down,
-              size: 20,
-              color: AppColors.textMuted,
             ),
         ],
       ),
