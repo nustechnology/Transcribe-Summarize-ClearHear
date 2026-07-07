@@ -1,5 +1,5 @@
 {
-  "dart.flutterSdkPath": ".fvm/versions/3.32.5",
+  "dart.flutterSdkPath": ".fvm/versions/3.44.4",
   "dart.openDevTools": "never",
   "dart.devToolsLocation": "external"
 }
