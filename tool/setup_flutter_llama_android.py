@@ -45,10 +45,10 @@ def main() -> int:
         print(f"Bootstrapping llama.cpp at {third_party_llama} ...")
         try:
             subprocess.run(clone_cmd, check=True)
-        except subprocess.CalledProcessError as exc:
+        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
             raise RuntimeError(
-                "Failed to clone llama.cpp into third_party/llama.cpp. "
-                "Check network access, then rerun tool/setup_flutter_llama_android.sh."
+                "Check network access and that git is installed, then rerun "
+                "tool/setup_flutter_llama_android.py."
             ) from exc
 
     plugin_roots: list[pathlib.Path] = []

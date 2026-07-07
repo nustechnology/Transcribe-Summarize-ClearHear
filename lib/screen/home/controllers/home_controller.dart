@@ -72,7 +72,13 @@ class HomeController extends GetxController {
     isAsrModelReady.value = false;
     asrModelDownloadProgress.value = 0;
     _whisperKitService.onDownloadProgress = (received, total) {
-      asrModelDownloadProgress.value = received / total;
+      if (total <= 0) {
+        asrModelDownloadProgress.value = 0.0;
+        return;
+      }
+
+      final progress = (received / total).clamp(0.0, 1.0);
+      asrModelDownloadProgress.value = progress.toDouble();
     };
     try {
       await _whisperKitService.ensureModelReady();
