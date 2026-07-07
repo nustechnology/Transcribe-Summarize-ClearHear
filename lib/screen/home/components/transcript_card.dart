@@ -6,7 +6,7 @@ import '../../../model/transcript_segment_entry.dart';
 import '../../../style/theme.dart';
 import '../../../util/asr_text_util.dart';
 import '../controllers/home_controller.dart';
-import 'name-avatar.dart';
+import 'name_avatar.dart';
 
 class TranscriptCard extends GetView<HomeController> {
   const TranscriptCard({super.key});
