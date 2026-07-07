@@ -12,13 +12,21 @@ import 'components/option_row.dart';
 import 'components/privacy_note.dart';
 import 'controllers/home_controller.dart';
 
-class HomeView extends GetView<HomeController> {
+class HomeView extends StatefulWidget {
   const HomeView({super.key});
+
+  @override
+  State<HomeView> createState() => _HomeViewState();
+}
+
+class _HomeViewState extends State<HomeView> {
+  late final HomeController controller = Get.find<HomeController>();
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
       final isListening = controller.isCaptioning.value;
+      final isPaused = controller.isPaused.value;
 
       return Scaffold(
         backgroundColor: AppColors.surface,
@@ -38,18 +46,27 @@ class HomeView extends GetView<HomeController> {
                       const Expanded(child: TranscriptCard()),
                       const SizedBox(height: 12),
                       if (isListening) ...[
+                        if (isPaused) ...[
+                          const OptionsRow(),
+                          const SizedBox(height: 10),
+                        ],
                         const AudioVisualizer(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 10),
                         const PrimaryActionButton(),
-                        const SizedBox(height: 12),
-                        const OptionsRow(),
+                        const SizedBox(height: 8),
+                        if (!isPaused) ...[
+                          const OptionsRow(),
+                        ],
+                        if (isPaused) ...[
+                          const PrivacyNote(),
+                        ],
                       ] else ...[
                         const OptionsRow(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 10),
                         const AudioVisualizer(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 10),
                         const PrimaryActionButton(),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         const PrivacyNote(),
                       ],
                       const SizedBox(height: 8),

@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../model/conversation_segment.dart';
+import '../../../model/transcript_segment_entry.dart';
 import '../../../lang/string_keys.dart';
 import '../../../service/audio_recorder_service.dart';
 import '../../../service/live_transcript_service.dart';
@@ -29,15 +32,26 @@ class HomeController extends GetxController {
 
   LiveTranscriptService? _activeLiveTranscript;
   Future<void>? _finishFuture;
+  DateTime? _captioningStartedAt;
+  Timer? _durationTimer;
 
   final isCaptioning = false.obs;
   final transcript = ''.obs;
+  final transcriptSegments = <TranscriptSegmentEntry>[].obs;
   final summary = ''.obs;
   final isProcessing = false.obs;
-  final transcriptFontSize = 20.0.obs;
+  final isPausing = false.obs;
+  final isFinishingTranscript = false.obs;
+  final isPaused = false.obs;
+  final captioningElapsed = Duration.zero.obs;
+  final transcriptFontSize = 18.0.obs;
   final statusMessage = ''.obs;
   final isAsrModelReady = false.obs;
   final isAsrModelLoading = true.obs;
+  final asrModelDownloadProgress = 0.0.obs;
+
+  RecorderController get recorderController =>
+      _audioRecorderService.recorderController;
 
   LiveTranscriptService _createLiveTranscriptService() {
     return _liveTranscriptService ??
@@ -55,14 +69,21 @@ class HomeController extends GetxController {
 
   Future<void> _preloadAsrModel() async {
     isAsrModelLoading.value = true;
+    isAsrModelReady.value = false;
+    asrModelDownloadProgress.value = 0;
+    _whisperKitService.onDownloadProgress = (received, total) {
+      asrModelDownloadProgress.value = received / total;
+    };
     try {
       await _whisperKitService.ensureModelReady();
+      asrModelDownloadProgress.value = 1;
       isAsrModelReady.value = true;
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] WhisperKit preload failed: $error');
       debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionModelFailed;
     } finally {
+      _whisperKitService.onDownloadProgress = null;
       isAsrModelLoading.value = false;
     }
   }
@@ -90,6 +111,13 @@ class HomeController extends GetxController {
       statusMessage.value = '';
       summary.value = '';
       transcript.value = '';
+      transcriptSegments.clear();
+      isFinishingTranscript.value = false;
+      isPaused.value = false;
+      isPausing.value = false;
+      captioningElapsed.value = Duration.zero;
+      _captioningStartedAt = DateTime.now();
+      _startDurationTimer();
 
       isCaptioning.value = true;
 
@@ -119,6 +147,10 @@ class HomeController extends GetxController {
     isCaptioning.value = false;
     summary.value = '';
     statusMessage.value = '';
+    isPaused.value = false;
+    isPausing.value = false;
+    isFinishingTranscript.value = true;
+    _stopDurationTimer();
 
     final liveTranscript = _activeLiveTranscript;
     _activeLiveTranscript = null;
@@ -129,10 +161,6 @@ class HomeController extends GetxController {
     }
 
     _scheduleFinish(liveTranscript);
-  }
-
-  Future<void> pauseCaptioning() async {
-    // TODO: Implement pause captioning
   }
 
   void _scheduleFinish(LiveTranscriptService liveTranscript) {
@@ -147,9 +175,18 @@ class HomeController extends GetxController {
     }
   }
 
+  void _applyTranscriptResult(LiveTranscriptResult result) {
+    transcript.value = result.text;
+    transcriptSegments.assignAll(
+      transcriptEntriesFromSegments(result.segments),
+    );
+  }
+
   Future<void> _finishInBackground(LiveTranscriptService liveTranscript) async {
+    statusMessage.value = '';
     try {
       final result = await liveTranscript.finish();
+      _applyTranscriptResult(result);
       debugPrint(
         '[Transcribe] Stop complete '
         '(${result.segments.length} segments, whisper=${result.usedWhisper})',
@@ -161,12 +198,95 @@ class HomeController extends GetxController {
           'whisper="${segment.whisperText}" wav=${segment.wavPath}',
         );
       }
+      final hasVisibleTranscript =
+          transcriptSegments.isNotEmpty || result.text.trim().isNotEmpty;
+      if (!hasVisibleTranscript) {
+        statusMessage.value = StringKeys.transcriptionFailed;
+      }
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Stop failed: $error');
       debugPrint('$stackTrace');
+      statusMessage.value = StringKeys.transcriptionFailed;
     } finally {
+      isFinishingTranscript.value = false;
       liveTranscript.dispose();
     }
+  }
+
+  Future<void> pauseCaptioning() async {
+    if (!isCaptioning.value || isPaused.value || isPausing.value) return;
+
+    final liveTranscript = _activeLiveTranscript;
+    if (liveTranscript == null) return;
+
+    isPaused.value = true;
+    isPausing.value = true;
+    _stopDurationTimer();
+    statusMessage.value = '';
+
+    try {
+      final result = await liveTranscript.pause();
+      if (!isCaptioning.value) return;
+
+      _applyTranscriptResult(result);
+      debugPrint(
+        '[Transcribe] Paused '
+        '(${result.segments.length} segments, whisper=${result.usedWhisper})',
+      );
+      debugPrint('[Transcribe] Paused text:\n${result.text}');
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Pause failed: $error');
+      debugPrint('$stackTrace');
+      isPaused.value = false;
+      _captioningStartedAt =
+          DateTime.now().subtract(captioningElapsed.value);
+      _startDurationTimer();
+      statusMessage.value = StringKeys.transcriptionFailed;
+    } finally {
+      isPausing.value = false;
+    }
+  }
+
+  Future<void> resumeCaptioning() async {
+    if (!isCaptioning.value || !isPaused.value || isPausing.value) return;
+
+    final liveTranscript = _activeLiveTranscript;
+    if (liveTranscript == null) return;
+
+    try {
+      await liveTranscript.resume();
+      isPaused.value = false;
+      statusMessage.value = '';
+      _captioningStartedAt =
+          DateTime.now().subtract(captioningElapsed.value);
+      _startDurationTimer();
+      debugPrint('[Transcribe] Resumed captioning');
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Resume failed: $error');
+      debugPrint('$stackTrace');
+      statusMessage.value = StringKeys.transcriptionFailed;
+    }
+  }
+
+  void _startDurationTimer() {
+    _durationTimer?.cancel();
+    _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final startedAt = _captioningStartedAt;
+      if (!isCaptioning.value || isPaused.value || startedAt == null) return;
+      captioningElapsed.value = DateTime.now().difference(startedAt);
+    });
+  }
+
+  void _stopDurationTimer() {
+    _durationTimer?.cancel();
+    _durationTimer = null;
+  }
+
+  String get formattedCaptioningElapsed {
+    final totalSeconds = captioningElapsed.value.inSeconds;
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
   Future<void> summarizeTranscript() async {
@@ -212,7 +332,7 @@ class HomeController extends GetxController {
   }
 
   void decreaseFontSize() {
-    if (transcriptFontSize.value > 18) {
+    if (transcriptFontSize.value > 16) {
       transcriptFontSize.value -= 2;
     }
   }
@@ -224,6 +344,7 @@ class HomeController extends GetxController {
   }
 
   Future<void> _tearDown() async {
+    _stopDurationTimer();
     final active = _activeLiveTranscript;
     if (active != null) {
       _activeLiveTranscript = null;

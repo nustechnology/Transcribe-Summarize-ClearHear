@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import pathlib
 import shutil
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -16,16 +17,49 @@ import urllib.request
 
 def main() -> int:
     pub_cache = pathlib.Path(os.environ.get("PUB_CACHE", pathlib.Path.home() / ".pub-cache"))
+    project_root = pathlib.Path(__file__).resolve().parents[1]
+    third_party_llama = project_root / "third_party" / "llama.cpp"
     upstream_base = os.environ.get(
         "LLAMA_UPSTREAM_BASE",
         "https://raw.githubusercontent.com/ggml-org/llama.cpp/master",
     ).rstrip("/")
     marker = "PATCHED_CLEARHEAR_ANDROID_LLAMA_H"
 
-    plugin_roots = sorted(pub_cache.glob("hosted/pub.dev/flutter_llama-*/llama.cpp"))
-    if not plugin_roots:
-        print("No flutter_llama llama.cpp tree found in pub-cache. Run 'flutter pub get' first.")
+    plugin_dirs = sorted(pub_cache.glob("hosted/pub.dev/flutter_llama-*"))
+    if not plugin_dirs:
+        print("No flutter_llama package found in pub-cache. Run 'flutter pub get' first.")
         return 0
+
+    # flutter_llama expects <plugin>/llama.cpp to exist, but pub.dev can ship it
+    # as a missing/broken symlink. Ensure a local copy is always available.
+    if not third_party_llama.exists():
+        third_party_llama.parent.mkdir(parents=True, exist_ok=True)
+        clone_cmd = [
+            "git",
+            "clone",
+            "--depth",
+            "1",
+            "https://github.com/ggml-org/llama.cpp.git",
+            str(third_party_llama),
+        ]
+        print(f"Bootstrapping llama.cpp at {third_party_llama} ...")
+        try:
+            subprocess.run(clone_cmd, check=True)
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                "Failed to clone llama.cpp into third_party/llama.cpp. "
+                "Check network access, then rerun tool/setup_flutter_llama_android.sh."
+            ) from exc
+
+    plugin_roots: list[pathlib.Path] = []
+    for plugin_dir in plugin_dirs:
+        plugin_llama = plugin_dir / "llama.cpp"
+        if plugin_llama.is_symlink() and not plugin_llama.exists():
+            plugin_llama.unlink()
+        if not plugin_llama.exists():
+            os.symlink(third_party_llama, plugin_llama, target_is_directory=True)
+            print(f"Linked: {plugin_llama} -> {third_party_llama}")
+        plugin_roots.append(plugin_llama)
 
     def fetch(path: str) -> str:
         url = f"{upstream_base}/{path}"

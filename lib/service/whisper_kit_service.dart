@@ -1,12 +1,29 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:whisper_kit/whisper_kit.dart';
 
 import '../config/ml_model_config.dart';
 import '../model/conversation_segment.dart';
 import '../util/asr_text_util.dart';
+import '../util/pcm_audio_util.dart';
+import '../util/wav_util.dart';
+
+/// Top-level relay so [Whisper]'s download callback stays isolate-sendable.
+void Function(int received, int total)? _whisperDownloadProgressSink;
+
+void _relayWhisperDownloadProgress(int received, int total) {
+  if (total <= 0) return;
+  final pct = (received / total * 100).toStringAsFixed(0);
+  debugPrint('[WhisperKit] model download $pct%');
+  _whisperDownloadProgressSink?.call(received, total);
+}
 
 /// Offline transcription of saved conversation segments via [whisper_kit].
 class WhisperKitService {
+  /// Called while the Whisper model is downloading (received bytes, total bytes).
+  void Function(int received, int total)? onDownloadProgress;
+
   Whisper? _whisper;
   bool _modelReady = false;
   Future<void>? _loading;
@@ -19,13 +36,10 @@ class WhisperKitService {
     if (_modelReady) return;
 
     try {
+      _whisperDownloadProgressSink = onDownloadProgress;
       _whisper = Whisper(
         model: _resolveWhisperModel(MlModelConfig.whisperModelName),
-        onDownloadProgress: (received, total) {
-          if (total <= 0) return;
-          final pct = (received / total * 100).toStringAsFixed(0);
-          debugPrint('[WhisperKit] model download $pct%');
-        },
+        onDownloadProgress: _relayWhisperDownloadProgress,
       );
 
       await _whisper!.getVersion();
@@ -38,6 +52,7 @@ class WhisperKitService {
       debugPrint('$stackTrace');
       rethrow;
     } finally {
+      _whisperDownloadProgressSink = null;
       _loading = null;
     }
   }
@@ -50,16 +65,36 @@ class WhisperKitService {
       throw StateError('WhisperKit model is not ready');
     }
 
+    final wavFile = File(wavPath);
+    if (!await wavFile.exists()) {
+      throw StateError('WAV file not found: $wavPath');
+    }
+
+    final wavBytes = await wavFile.length();
+    final durationSec = durationSecondsForPcm16(
+      wavBytes > wavHeaderSize ? wavBytes - wavHeaderSize : 0,
+      sampleRate: MlModelConfig.audioSampleRate,
+    );
+    debugPrint(
+      '[WhisperKit] transcribing $wavPath '
+      '(${durationSec.toStringAsFixed(2)}s, $wavBytes bytes)',
+    );
+
     final result = await whisper.transcribe(
       transcribeRequest: TranscribeRequest(
         audio: wavPath,
         language: MlModelConfig.whisperLanguage,
         isNoTimestamps: true,
+        isVerbose: kDebugMode,
         threads: MlModelConfig.whisperThreads,
       ),
     );
 
-    return formatAsrText(result.text);
+    final text = _extractTranscriptText(result);
+    if (text.isEmpty) {
+      debugPrint('[WhisperKit] empty transcript for $wavPath');
+    }
+    return formatAsrText(text);
   }
 
   /// Transcribes each saved segment and returns the combined transcript.
@@ -86,10 +121,11 @@ class WhisperKitService {
       }
     }
 
-    return lines.join('\n');
+    return joinSegmentTexts(lines);
   }
 
   void dispose() {
+    _whisperDownloadProgressSink = null;
     _whisper = null;
     _modelReady = false;
     _loading = null;
@@ -107,4 +143,17 @@ WhisperModel _resolveWhisperModel(String name) {
     default:
       return WhisperModel.tiny;
   }
+}
+
+String _extractTranscriptText(WhisperTranscribeResponse result) {
+  final direct = result.text.trim();
+  if (direct.isNotEmpty) return direct;
+
+  final segments = result.segments;
+  if (segments == null || segments.isEmpty) return '';
+
+  return segments
+      .map((segment) => segment.text.trim())
+      .where((text) => text.isNotEmpty)
+      .join(' ');
 }
