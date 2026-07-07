@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import '../config/ml_model_config.dart';
 import '../model/conversation_segment.dart';
 import '../util/asr_text_util.dart';
 import '../util/pcm_silence_detector.dart';
@@ -10,6 +12,25 @@ import 'conversation_segment_capture.dart';
 import 'whisper_kit_service.dart';
 
 typedef LiveTranscriptCallback = void Function(String fullText);
+
+double _computeNormalizedRms(Uint8List pcmBytes) {
+  if (pcmBytes.length < 2) return 0.0;
+  final view = ByteData.view(
+    pcmBytes.buffer,
+    pcmBytes.offsetInBytes,
+    pcmBytes.length,
+  );
+  var sumSquares = 0.0;
+  final sampleCount = pcmBytes.length ~/ 2;
+  for (var i = 0; i < pcmBytes.length; i += 2) {
+    final sample = view.getInt16(i, Endian.little).toDouble();
+    sumSquares += sample * sample;
+  }
+  final rms = math.sqrt(sumSquares / sampleCount);
+  // Log-scale normalize: practical speech sits 300–5000 RMS.
+  const maxRms = 6000.0;
+  return (math.log(1 + rms) / math.log(1 + maxRms)).clamp(0.0, 1.0);
+}
 
 /// Records conversation segments and transcribes them with whisper_kit.
 class LiveTranscriptService {
@@ -29,76 +50,119 @@ class LiveTranscriptService {
   final PcmSilenceDetector _silenceDetector;
 
   bool _isActive = false;
-  bool _isPaused = false;
 
-  bool get isPaused => _isPaused;
+  /// Single lock: only one WhisperKit inference runs at a time.
+  bool _inferencing = false;
 
-  Future<void> start({LiveTranscriptCallback? onUpdate}) async {
+  Timer? _partialTimer;
+  DateTime? _lastCommitTime;
+
+  void Function(String)? _onPartial;
+  void Function(String text, bool isNewParagraph)? _onFinal;
+  void Function(double amplitude)? _onAmplitude;
+
+  Future<void> start({
+    void Function(String partial)? onPartial,
+    void Function(String text, bool isNewParagraph)? onFinal,
+    void Function(double amplitude)? onAmplitude,
+  }) async {
     if (_isActive) return;
 
     await _whisperKitService.ensureModelReady();
     await _segmentCapture.start();
     _silenceDetector.reset();
-    _isPaused = false;
-    try {
-      await _audioRecorderService.startStreaming(
-        onChunk: (chunk) => _handleChunk(chunk),
-      );
-      _isActive = true;
-    } catch (_) {
-      _isActive = false;
-      rethrow;
-    }
-  }
+    _isActive = true;
+    _lastCommitTime = null;
+    _onPartial = onPartial;
+    _onFinal = onFinal;
+    _onAmplitude = onAmplitude;
 
-  /// Pause recording and transcribe captured segments with WhisperKit.
-  Future<LiveTranscriptResult> pause() async {
-    if (!_isActive || _isPaused) {
-      return _buildCurrentResult();
-    }
+    final maxBytes =
+        (MlModelConfig.maxSegmentSeconds * MlModelConfig.pcmBytesPerSecond)
+            .round();
 
-    _isActive = false;
-    _isPaused = true;
+    _partialTimer =
+        Timer.periodic(const Duration(milliseconds: 1000), (_) {
+      if (!_isActive || _inferencing) return;
+      unawaited(_emitPartial());
+    });
 
-    try {
-      await _audioRecorderService.stopStreaming();
-    } catch (error, stackTrace) {
-      debugPrint('[LiveTranscript] pause stop streaming failed: $error');
-      debugPrint('$stackTrace');
-    }
-
-    await _commitOpenSegment(force: true);
-    final result = await _transcribePendingSegments();
-
-    debugPrint(
-      '[LiveTranscript] paused (${result.segments.length} segments, '
-      'whisper=${result.usedWhisper}):\n${result.text}',
+    await _audioRecorderService.startStreaming(
+      onChunk: (chunk) {
+        if (!_isActive) return;
+        _segmentCapture.append(chunk);
+        _onAmplitude?.call(_computeNormalizedRms(chunk));
+        final silenceBoundary = _silenceDetector.feed(chunk);
+        final maxReached =
+            _segmentCapture.currentBufferBytes >= maxBytes;
+        if (silenceBoundary || maxReached) {
+          _silenceDetector.reset();
+          unawaited(_commitAndTranscribe());
+        }
+      },
     );
-
-    return result;
   }
 
-  /// Resume recording after [pause].
-  Future<void> resume() async {
-    if (_isActive || !_isPaused) return;
+  // Require at least 2s of audio for partial transcription to avoid
+  // sending noise-only buffers to whisper which can produce invalid UTF-8
+  // and crash the native library (SIGABRT).
+  static const _minPartialPcmBytes =
+      MlModelConfig.audioSampleRate * 2 * 2; // 2s at 16kHz 16-bit mono
 
-    _silenceDetector.reset();
+  Future<void> _emitPartial() async {
+    _inferencing = true;
     try {
-      await _audioRecorderService.startStreaming(
-        onChunk: (chunk) => _handleChunk(chunk),
-      );
-      _isActive = true;
-      _isPaused = false;
+      final pcm = _segmentCapture.peekCurrentPcm();
+      if (pcm.length < _minPartialPcmBytes) return;
+      // Skip if RMS is too low — silence/noise would cause whisper to produce
+      // garbage tokens including invalid UTF-8 bytes.
+      if (_computeNormalizedRms(pcm) < 0.05) return;
+      final text = await _whisperKitService.transcribePcmBytes(pcm);
+      if (_isActive && text.isNotEmpty) {
+        _onPartial?.call(text);
+      }
     } catch (_) {
-      _isActive = false;
-      rethrow;
+    } finally {
+      _inferencing = false;
     }
   }
 
-  /// Stop streaming, transcribe saved segments with WhisperKit, log only.
+  Future<void> _commitAndTranscribe() async {
+    if (_inferencing) return;
+    _inferencing = true;
+    try {
+      final segment = await _segmentCapture.commitCurrent();
+      if (segment == null) return;
+
+      final now = DateTime.now();
+      final isNewParagraph = _lastCommitTime != null &&
+          now.difference(_lastCommitTime!).inMilliseconds >
+              MlModelConfig.paragraphBreakMs;
+      _lastCommitTime = now;
+
+      debugPrint(
+          '[LiveTranscript] saved segment ${segment.id}: ${segment.wavPath}');
+
+      try {
+        final text = await _whisperKitService.transcribeWav(segment.wavPath);
+        segment.whisperText = text;
+        if (text.isNotEmpty && _isActive) {
+          _onFinal?.call(text, isNewParagraph);
+        }
+      } catch (e, st) {
+        debugPrint('[LiveTranscript] Real-time transcription failed: $e');
+        debugPrint('$st');
+      }
+    } finally {
+      _inferencing = false;
+    }
+  }
+
+  /// Stop streaming, finalize any open segment, return result.
   Future<LiveTranscriptResult> finish() async {
     _isActive = false;
-    _isPaused = false;
+    _partialTimer?.cancel();
+    _partialTimer = null;
 
     if (_audioRecorderService.isStreaming) {
       try {
@@ -109,33 +173,21 @@ class LiveTranscriptService {
       }
     }
 
-    await _commitOpenSegment(force: true);
-    final result = await _transcribePendingSegments();
+    // Transcribe any remaining open segment
+    await _commitAndTranscribe();
+
+    final segments = _segmentCapture.segments;
+    final usedWhisper = segments.any((s) => s.whisperText.isNotEmpty);
 
     debugPrint(
-      '[LiveTranscript] finished (${result.segments.length} segments, '
-      'whisper=${result.usedWhisper}):\n${result.text}',
+      '[LiveTranscript] finished (${segments.length} segments, '
+      'whisper=$usedWhisper):\n${_combinedDisplayText()}',
     );
 
-    return result;
-  }
-
-  void _handleChunk(Uint8List chunk) {
-    if (!_isActive) return;
-    _segmentCapture.append(chunk);
-    if (_silenceDetector.feed(chunk)) {
-      unawaited(_commitOpenSegment());
-    }
-  }
-
-  Future<LiveTranscriptResult> _buildCurrentResult() {
-    return Future.value(
-      LiveTranscriptResult(
-        text: _combinedDisplayText(),
-        segments: List.unmodifiable(_segmentCapture.segments),
-        usedWhisper: _segmentCapture.segments
-            .any((segment) => segment.whisperText.trim().isNotEmpty),
-      ),
+    return LiveTranscriptResult(
+      text: _combinedDisplayText(),
+      segments: List.unmodifiable(segments),
+      usedWhisper: usedWhisper,
     );
   }
 
@@ -145,47 +197,10 @@ class LiveTranscriptService {
     );
   }
 
-  Future<LiveTranscriptResult> _transcribePendingSegments() async {
-    final segments = _segmentCapture.segments;
-    final pendingSegments = segments
-        .where((segment) => segment.whisperText.trim().isEmpty)
-        .toList(growable: false);
-
-    var usedWhisper = segments
-        .any((segment) => segment.whisperText.trim().isNotEmpty);
-
-    if (pendingSegments.isNotEmpty) {
-      try {
-        final whisperText = await _whisperKitService
-            .buildTranscriptFromSegments(pendingSegments);
-        if (whisperText.trim().isNotEmpty) {
-          usedWhisper = true;
-        }
-      } catch (error, stackTrace) {
-        debugPrint('[LiveTranscript] WhisperKit segment pass failed: $error');
-        debugPrint('$stackTrace');
-      }
-    }
-
-    return LiveTranscriptResult(
-      text: _combinedDisplayText(),
-      segments: List.unmodifiable(segments),
-      usedWhisper: usedWhisper,
-    );
-  }
-
-  Future<void> _commitOpenSegment({bool force = false}) async {
-    final segment = await _segmentCapture.commitCurrent(force: force);
-    if (segment != null) {
-      debugPrint(
-        '[LiveTranscript] saved segment ${segment.id}: ${segment.wavPath}',
-      );
-    }
-  }
-
   void dispose() {
     _isActive = false;
-    _isPaused = false;
+    _partialTimer?.cancel();
+    _partialTimer = null;
     unawaited(_segmentCapture.dispose());
   }
 }

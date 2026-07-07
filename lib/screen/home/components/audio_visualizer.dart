@@ -6,12 +6,14 @@ import '../controllers/home_controller.dart';
 
 import '../../../style/theme.dart';
 
+// Shared bar geometry used by both AudioVisualizer and MiniAudioVisualizer.
+const _barWidth = 2.5;
+const _barGap = 3.0;
+
 class AudioVisualizer extends GetView<HomeController> {
   const AudioVisualizer({super.key});
 
   static const _barCount = 32;
-  static const _listeningBarWidth = 2.5;
-  static const _listeningBarGap = 3.0;
 
   @override
   Widget build(BuildContext context) {
@@ -57,8 +59,8 @@ class AudioVisualizer extends GetView<HomeController> {
           builder: (context, constraints) {
             final barCount = math.max(
               40,
-              ((constraints.maxWidth + _listeningBarGap) /
-                      (_listeningBarWidth + _listeningBarGap))
+              ((constraints.maxWidth + _barGap) /
+                      (_barWidth + _barGap))
                   .floor(),
             );
 
@@ -75,14 +77,14 @@ class AudioVisualizer extends GetView<HomeController> {
 
                 return Padding(
                   padding: EdgeInsets.only(
-                    right: index < barCount - 1 ? _listeningBarGap : 0,
+                    right: index < barCount - 1 ? _barGap : 0,
                   ),
                   child: Container(
-                    width: _listeningBarWidth,
+                    width: _barWidth,
                     height: height,
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: opacity),
-                      borderRadius: BorderRadius.circular(_listeningBarWidth),
+                      borderRadius: BorderRadius.circular(_barWidth),
                     ),
                   ),
                 );
@@ -92,5 +94,48 @@ class AudioVisualizer extends GetView<HomeController> {
         ),
       );
     });
+  }
+}
+
+/// Static mini waveform for the status bar (fixed 80×20, no animation).
+class MiniAudioVisualizer extends StatelessWidget {
+  const MiniAudioVisualizer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 80,
+      height: 20,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final barCount = ((constraints.maxWidth + _barGap) /
+                  (_barWidth + _barGap))
+              .floor();
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: List.generate(barCount, (i) {
+              final wave = (math.sin(i * 0.55) * 0.4 +
+                      math.sin(i * 0.23 + 1) * 0.35 +
+                      math.sin(i * 0.91 + 2) * 0.25)
+                  .abs();
+              final height = 4.0 + wave * 12.0;
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: i < barCount - 1 ? _barGap : 0,
+                ),
+                child: Container(
+                  width: _barWidth,
+                  height: height,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(_barWidth),
+                  ),
+                ),
+              );
+            }),
+          );
+        },
+      ),
+    );
   }
 }

@@ -18,6 +18,11 @@ class ConversationSegmentCapture {
 
   List<ConversationSegment> get segments => List.unmodifiable(_segments);
 
+  int get currentBufferBytes => _current.length;
+
+  /// Returns a snapshot of the current PCM buffer without clearing it.
+  Uint8List peekCurrentPcm() => Uint8List.fromList(_current.toBytes());
+
   Future<void> start() async {
     await dispose();
     _current.clear();

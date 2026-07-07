@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'audio_visualizer.dart';
 
 import '../../../lang/string_keys.dart';
 import '../../../style/theme.dart';
@@ -107,13 +108,7 @@ class StatusBar extends GetView<HomeController> {
               ],
             ),
             isPaused
-                ? Text(
-                    StringKeys.homeStopCaptioningPaused.tr,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
-                    ),
-                  )
+                ? const MiniAudioVisualizer()
                 : _FontSizeControl(
                     onDecrease: controller.decreaseFontSize,
                     onIncrease: controller.increaseFontSize,

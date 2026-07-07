@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:whisper_kit/whisper_kit.dart';
 
 import '../config/ml_model_config.dart';
@@ -43,6 +44,21 @@ class WhisperKitService {
       rethrow;
     } finally {
       _loading = null;
+    }
+  }
+
+  /// Transcribes raw PCM bytes by writing a temporary WAV file.
+  Future<String> transcribePcmBytes(Uint8List pcm) async {
+    final tmpDir = await getTemporaryDirectory();
+    final tmpPath =
+        '${tmpDir.path}/partial_${DateTime.now().millisecondsSinceEpoch}.wav';
+    try {
+      await File(tmpPath).writeAsBytes(buildWavFromPcm16(pcm));
+      return await transcribeWav(tmpPath);
+    } finally {
+      try {
+        await File(tmpPath).delete();
+      } catch (_) {}
     }
   }
 
@@ -94,6 +110,10 @@ class WhisperKitService {
 
     final lines = <String>[];
     for (final segment in segments) {
+      if (segment.whisperText.isNotEmpty) {
+        lines.add(segment.whisperText);
+        continue;
+      }
       try {
         final text = await transcribeWav(segment.wavPath);
         segment.whisperText = text;
