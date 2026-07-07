@@ -1,11 +1,11 @@
 import 'package:get/get.dart';
-
-import '../../screen/history/history_widget.dart';
-import '../../screen/home/bindings/home_binding.dart';
-import '../../screen/home/home_widget.dart';
-import '../../screen/main/bindings/main_binding.dart';
-import '../../screen/main/main_shell.dart';
-import '../../screen/settings/settings_widget.dart';
+import 'package:transcribe_summarize_clearhear/screen/history/bindings/history_binding.dart';
+import 'package:transcribe_summarize_clearhear/screen/history/history_widget.dart';
+import 'package:transcribe_summarize_clearhear/screen/home/bindings/home_binding.dart';
+import 'package:transcribe_summarize_clearhear/screen/home/home_widget.dart';
+import 'package:transcribe_summarize_clearhear/screen/main/bindings/main_binding.dart';
+import 'package:transcribe_summarize_clearhear/screen/main/main_shell.dart';
+import 'package:transcribe_summarize_clearhear/screen/settings/settings_widget.dart';
 
 abstract class AppRoutes {
   static const main = '/';
@@ -32,6 +32,7 @@ class AppPages {
         GetPage(
           name: AppRoutes.history,
           page: () => const HistoryView(),
+          binding: HistoryBinding(),
         ),
         GetPage(
           name: AppRoutes.settings,

@@ -43,6 +43,21 @@ abstract class StringKeys {
   static const homeConfidenceHigh = 'home_confidence_high';
   static const navSummary = 'nav_summary';
   static const homeSummarize = 'home_summarize';
+  static const historySearchHint = 'history_search_hint';
+  static const historyNoResults = 'history_no_results';
+  static const historyNoMatchingSessions = 'history_no_matching_sessions';
+  static const historySecureNote = 'history_secure_note';
+  static const historyItemsSelected = 'history_items_selected';
+  static const historySelectAll = 'history_select_all';
+  static const historyDeselectAll = 'history_deselect_all';
+  static const historyCancel = 'history_cancel';
+  static const historyDeleteConfirmTitle = 'history_delete_confirm_title';
+  static const historyDeleteConfirmMessage = 'history_delete_confirm_message';
+  static const historyDeleteConfirmAction = 'history_delete_confirm_action';
+  static const historyDeleteSuccess = 'history_delete_success';
+  static const datetimeToday = 'datetime_today';
+  static const datetimeYesterday = 'datetime_yesterday';
+  static const somethingWentWrong = 'something_went_wrong';
 
   static String t(String key) => key.tr;
 }
