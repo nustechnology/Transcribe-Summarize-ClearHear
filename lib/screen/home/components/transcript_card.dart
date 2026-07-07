@@ -166,10 +166,10 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
             child: isLoadingTranscriptSpeakers
                 ? const Center(child: CircularProgressIndicator())
                 : transcriptSpeakers.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
-                          'No transcript yet.',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                          StringKeys.noTranscriptYet.tr,
+                          style: const TextStyle(fontSize: 16, color: Colors.grey),
                         ),
                       )
                     : ListView.separated(
@@ -216,9 +216,9 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
                       ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Captions are saved locally on your device.',
-            style: TextStyle(fontSize: 13, color: Colors.grey),
+          Text(
+            StringKeys.captionsSavedLocally.tr,
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
           ),
         ],
       );
@@ -675,7 +675,7 @@ class _PausedHeader extends StatelessWidget {
         border: Border.all(color: const Color(0xFF9ED2D0)),
       ),
       child: Text(
-        'Paused - $duration',
+        StringKeys.pausedDuration.trParams({'duration': duration}),
         style: const TextStyle(
           fontSize: 14,
           color: Color(0xFF2C6B73),

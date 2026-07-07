@@ -76,10 +76,6 @@ def patch_plugin_access(path: pathlib.Path, text: str) -> str:
     ]
     for old, new in replacements:
         text = text.replace(old, new, 1)
-    text = text.replace(
-        "guard let resultC = request(mutableString) else {",
-        "guard let resultC = request(mutableString) else {",
-    )
     if "guard let resultC = request(mutableString)" not in text:
         text = text.replace(
             "let resultC = request(mutableString)",

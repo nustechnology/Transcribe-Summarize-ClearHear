@@ -62,6 +62,9 @@ abstract class StringKeys {
   static const datetimeToday = 'datetime_today';
   static const datetimeYesterday = 'datetime_yesterday';
   static const somethingWentWrong = 'something_went_wrong';
+  static const noTranscriptYet = 'no_transcript_yet';
+  static const captionsSavedLocally = 'captions_saved_locally';
+  static const pausedDuration = 'paused_duration';
 
   static String t(String key) => key.tr;
 }

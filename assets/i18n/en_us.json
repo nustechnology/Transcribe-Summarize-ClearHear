@@ -56,5 +56,8 @@
   "history_delete_success": "Deleted @count sessions",
   "datetime_today": "Today",
   "datetime_yesterday": "Yesterday",
-  "something_went_wrong": "Something went wrong. Please try again."
+  "something_went_wrong": "Something went wrong. Please try again.",
+  "no_transcript_yet": "No transcript yet.",
+  "captions_saved_locally": "Captions are saved locally on your device.",
+  "paused_duration": "Paused - @duration"
 }

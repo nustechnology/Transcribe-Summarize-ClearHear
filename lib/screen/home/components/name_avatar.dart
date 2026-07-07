@@ -27,7 +27,9 @@ class NameAvatar extends StatelessWidget {
   }
 
   String _initials(String name) {
-    final words = name.trim().split(RegExp(r'\s+'));
+    final words = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+
+    if (words.isEmpty) return '?';
 
     if (words.length == 1) {
       return words.first.substring(0, words.first.length >= 2 ? 2 : 1).toUpperCase();

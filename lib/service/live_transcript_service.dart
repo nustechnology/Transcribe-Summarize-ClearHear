@@ -22,7 +22,7 @@ double _computeNormalizedRms(Uint8List pcmBytes) {
   );
   var sumSquares = 0.0;
   final sampleCount = pcmBytes.length ~/ 2;
-  for (var i = 0; i < pcmBytes.length; i += 2) {
+  for (var i = 0; i < sampleCount * 2; i += 2) {
     final sample = view.getInt16(i, Endian.little).toDouble();
     sumSquares += sample * sample;
   }
@@ -129,6 +129,13 @@ class LiveTranscriptService {
 
   Future<void> _commitAndTranscribe() async {
     if (_inferencing) return;
+
+    final pcm = _segmentCapture.peekCurrentPcm();
+    if (_computeNormalizedRms(pcm) < 0.05) {
+      _segmentCapture.discardCurrent();
+      return;
+    }
+
     _inferencing = true;
     try {
       final segment = await _segmentCapture.commitCurrent();

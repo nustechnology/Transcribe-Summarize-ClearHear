@@ -56,5 +56,8 @@
   "history_delete_success": "Đã xóa @count bản ghi",
   "datetime_today": "Hôm nay",
   "datetime_yesterday": "Hôm qua",
-  "something_went_wrong": "Đã xảy ra lỗi. Vui lòng thử lại."
+  "something_went_wrong": "Đã xảy ra lỗi. Vui lòng thử lại.",
+  "no_transcript_yet": "Chưa có bản ghi nào.",
+  "captions_saved_locally": "Phụ đề được lưu cục bộ trên thiết bị của bạn.",
+  "paused_duration": "Đã tạm dừng - @duration"
 }

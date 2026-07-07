@@ -35,6 +35,8 @@ class ConversationSegmentCapture {
     await Directory(_sessionDir!).create(recursive: true);
   }
 
+  void discardCurrent() => _current.clear();
+
   void append(Uint8List chunk) {
     if (chunk.isEmpty) return;
     _current.add(chunk);

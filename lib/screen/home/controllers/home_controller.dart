@@ -234,7 +234,9 @@ class HomeController extends GetxController {
   }
 
   Future<void> pauseCaptioning() async {
-    if (!isCaptioning.value) return;
+    if (!isCaptioning.value || isPausing.value) return;
+
+    isPausing.value = true;
 
     // Freeze finalized text, wipe any unfinished partial.
     partialText.value = '';
@@ -243,11 +245,11 @@ class HomeController extends GetxController {
     isPaused.value = true;
     isLoadingTranscript.value = true;
 
-    final activeDuration = _accumulatedDuration +
-        (_captioningStartTime != null
-            ? DateTime.now().difference(_captioningStartTime!)
-            : Duration.zero);
-    sessionDuration.value = _formatDuration(activeDuration);
+    if (_captioningStartTime != null) {
+      _accumulatedDuration += DateTime.now().difference(_captioningStartTime!);
+      _captioningStartTime = null;
+    }
+    sessionDuration.value = _formatDuration(_accumulatedDuration);
     _stopDurationTimer();
 
     final liveTranscript = _activeLiveTranscript;
@@ -284,14 +286,16 @@ class HomeController extends GetxController {
       debugPrint('[Transcribe] Pause finish failed: $error');
       debugPrint('$stackTrace');
     } finally {
+      isPausing.value = false;
       isLoadingTranscript.value = false;
       liveTranscript.dispose();
     }
   }
 
   Future<void> resumeCaptioning() async {
-    if (!isCaptioning.value) return;
+    if (!isCaptioning.value || isPausing.value) return;
 
+    isPausing.value = true;
     isPaused.value = false;
     partialText.value = '';
     if (_captioningStartTime != null) {
@@ -316,8 +320,11 @@ class HomeController extends GetxController {
           finalizedParagraphs.add(text);
         },
       );
+      isPausing.value = false;
       debugPrint('[Transcribe] Resumed captioning');
     } catch (error, stackTrace) {
+      isPausing.value = false;
+      isPaused.value = true;
       debugPrint('[Transcribe] Resume failed: $error');
       debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionFailed;
