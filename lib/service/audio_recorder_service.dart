@@ -55,7 +55,16 @@ class AudioRecorderService {
     _recordingPath = path;
 
     _chunkSubscription = recorderController.onAudioChunks.listen(onChunk);
-    await recorderController.record(path: path, recorderSettings: recorderSettings);
+    try {
+      await recorderController.record(
+        path: path,
+        recorderSettings: recorderSettings,
+      );
+    } catch (_) {
+      await _chunkSubscription?.cancel();
+      _chunkSubscription = null;
+      rethrow;
+    }
     _isStreaming = true;
   }
 

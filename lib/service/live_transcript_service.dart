@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../model/conversation_segment.dart';
 import '../util/asr_text_util.dart';
+import '../util/pcm_audio_util.dart';
 import '../util/pcm_silence_detector.dart';
 import 'audio_recorder_service.dart';
 import 'conversation_segment_capture.dart';
@@ -122,8 +123,12 @@ class LiveTranscriptService {
 
   void _handleChunk(Uint8List chunk) {
     if (!_isActive) return;
-    _segmentCapture.append(chunk);
-    if (_silenceDetector.feed(chunk)) {
+
+    final pcm = recorderChunkToPcm16(chunk);
+    if (pcm.isEmpty) return;
+
+    _segmentCapture.append(pcm);
+    if (_silenceDetector.feed(pcm)) {
       unawaited(_commitOpenSegment());
     }
   }

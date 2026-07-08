@@ -155,13 +155,14 @@ class HomeController extends GetxController {
       isPausing.value = false;
       captioningElapsed.value = Duration.zero;
       transcriptFontSize.value = defaultCaptionFontSize.value;
-      _captioningStartedAt = DateTime.now();
-      _startDurationTimer();
 
       isCaptioning.value = true;
 
       _activeLiveTranscript = _createLiveTranscriptService();
       await _activeLiveTranscript!.start();
+
+      _captioningStartedAt = DateTime.now();
+      _startDurationTimer();
 
       debugPrint('[Transcribe] Segment recording started');
     } on MissingPluginException {
@@ -293,6 +294,7 @@ class HomeController extends GetxController {
     final liveTranscript = _activeLiveTranscript;
     if (liveTranscript == null) return;
 
+    isPausing.value = false;
     try {
       await liveTranscript.resume();
       isPaused.value = false;
@@ -305,6 +307,8 @@ class HomeController extends GetxController {
       debugPrint('[Transcribe] Resume failed: $error');
       debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionFailed;
+    } finally {
+      isPausing.value = false;
     }
   }
 

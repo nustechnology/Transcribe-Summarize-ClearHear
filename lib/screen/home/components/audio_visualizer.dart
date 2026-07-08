@@ -65,18 +65,17 @@ abstract final class _WaveformMetrics {
     if (bytes.isEmpty) return 0;
 
     if (Platform.isIOS) {
-      if (bytes.length < 4) return 0;
+      final alignedLength = bytes.length - (bytes.length % 4);
+      if (alignedLength < 4) return 0;
 
-      final sampleCount = bytes.length ~/ 4;
-      final samples = bytes.buffer.asFloat32List(
-        bytes.offsetInBytes,
-        sampleCount,
-      );
+      final sampleCount = alignedLength ~/ 4;
+      final view = ByteData.sublistView(bytes, 0, alignedLength);
       var sum = 0.0;
-      for (final sample in samples) {
+      for (var i = 0; i < sampleCount; i++) {
+        final sample = view.getFloat32(i * 4, Endian.little);
         sum += sample * sample;
       }
-      return math.sqrt(sum / samples.length);
+      return math.sqrt(sum / sampleCount);
     }
 
     var sum = 0.0;

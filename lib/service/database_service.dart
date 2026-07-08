@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:transcribe_summarize_clearhear/shared/models/settings_model.dart';
 
 /// Low-level SQLite wrapper.
 ///
@@ -224,6 +225,29 @@ class DatabaseService {
         (id, font_size, theme, saving_enabled, keep_screen_on, power_saver, updated_at)
       VALUES (1, 16.0, 'system', 1, 0, 0, $now)
     ''');
+  }
+
+  // ── Bulk operations ────────────────────────────────────────
+
+  /// Atomically clears all user data in a single transaction:
+  /// deletes every session (segments and FTS rows cascade) and restores the
+  /// settings singleton to its seeded defaults.
+  ///
+  /// Because both writes run inside one transaction, a failure in either step
+  /// rolls back the whole operation — the database is never left in a partial
+  /// state (e.g. transcripts gone but stale settings retained).
+  Future<void> clearAllUserData() async {
+    final db = await database;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    await db.transaction((txn) async {
+      await txn.delete('sessions');
+      await txn.insert(
+        'settings',
+        SettingsModel.defaults().copyWith(updatedAt: now).toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+    debugPrint('[DB] Cleared all user data (sessions + settings reset)');
   }
 
   // ── Lifecycle ──────────────────────────────────────────────

@@ -1,5 +1,31 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data';
+
+/// Converts [audio_waveforms] `onAudioChunks` bytes to mono PCM16 little-endian.
+///
+/// iOS streams Float32 samples; Android streams PCM16.
+Uint8List recorderChunkToPcm16(Uint8List chunk) {
+  if (chunk.isEmpty || !Platform.isIOS) return chunk;
+
+  final alignedLength = chunk.length - (chunk.length % 4);
+  if (alignedLength < 4) return Uint8List(0);
+
+  final sampleCount = alignedLength ~/ 4;
+  final view = ByteData.sublistView(chunk, 0, alignedLength);
+  final out = Uint8List(sampleCount * 2);
+  final outView = ByteData.sublistView(out);
+
+  for (var i = 0; i < sampleCount; i++) {
+    final scaled = (view.getFloat32(i * 4, Endian.little).clamp(-1.0, 1.0) *
+            32767)
+        .round()
+        .clamp(-32768, 32767);
+    outView.setInt16(i * 2, scaled, Endian.little);
+  }
+
+  return out;
+}
 
 /// Peak-normalizes mono PCM16 so quiet mic input is usable by Whisper.
 Uint8List normalizePcm16(Uint8List pcm) {
