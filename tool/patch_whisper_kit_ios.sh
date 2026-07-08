@@ -177,9 +177,43 @@ extension WhisperKitPlugin: EnhancedAudioManagerDelegate {
     return text
 
 def patch_format_converter(path: pathlib.Path, text: str) -> str:
-    if "PATCHED_CLEARHEAR_FORMAT_CONVERTER" in text:
-        return text
-    old = """        if let audioTrack = asset.tracks(withMediaType: .audio).first {
+    if "PATCHED_CLEARHEAR_FORMAT_CONVERTER" not in text:
+        old_blocks = [
+            """    func getAudioMetadata(url: URL) -> AudioMetadata? {
+        let asset = AVURLAsset(url: url)
+
+        guard let duration = asset.duration.seconds,
+              duration > 0 else { return nil }
+
+        var sampleRate: Double = 0
+        var channelCount: Int = 0
+        var bitRate: Int = 0
+
+        if let audioTrack = asset.tracks(withMediaType: .audio).first {
+            let formatDescriptions = audioTrack.formatDescriptions
+            for formatDescription in formatDescriptions {
+                if let streamDescription = formatDescription.streamBasicDescription {
+                    sampleRate = streamDescription.pointee.mSampleRate
+                    channelCount = Int(streamDescription.pointee.mChannelsPerFrame)
+                    break
+                }
+            }
+        }
+
+        bitRate = Int(asset.preferredTrackRate) // Approximation
+
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0""",
+            """    func getAudioMetadata(url: URL) -> AudioMetadata? {
+        let asset = AVURLAsset(url: url)
+
+        guard let duration = asset.duration.seconds,
+              duration > 0 else { return nil }
+
+        var sampleRate: Double = 0
+        var channelCount: Int = 0
+        var bitRate: Int = 0
+
+        if let audioTrack = asset.tracks(withMediaType: .audio).first {
             let formatDescriptions = audioTrack.formatDescriptions
             for formatDescription in formatDescriptions {
                 guard let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) else {
@@ -193,8 +227,12 @@ def patch_format_converter(path: pathlib.Path, text: str) -> str:
 
         bitRate = Int(asset.preferredTrackRate) // Approximation
 
-        let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0"""
-    new = """        // PATCHED_CLEARHEAR_FORMAT_CONVERTER
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0""",
+        ]
+        new = """    func getAudioMetadata(url: URL) -> AudioMetadata? {
+        let asset = AVURLAsset(url: url)
+
+        // PATCHED_CLEARHEAR_FORMAT_CONVERTER
         let duration = asset.duration.seconds
         guard duration > 0 else { return nil }
 
@@ -211,8 +249,39 @@ def patch_format_converter(path: pathlib.Path, text: str) -> str:
         if duration > 0 {
             bitRate = Int(Double(fileSize * 8) / duration)
         }"""
-    if old in text:
-        return text.replace(old, new, 1)
+        for old in old_blocks:
+            if old in text:
+                text = text.replace(old, new, 1)
+                break
+
+    if "PATCHED_CLEARHEAR_FORMAT_CONVERTER_BITRATE" not in text:
+        text = text.replace(
+            "            converter.bitRate = settings.bitRate",
+            "            // PATCHED_CLEARHEAR_FORMAT_CONVERTER_BITRATE\n            converter.bitRate = settings.bitRate ?? 128000",
+            1,
+        )
+
+    if "PATCHED_CLEARHEAR_FORMAT_CONVERTER_CHANNELS" not in text:
+        text = text.replace(
+            "return AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: settings.sampleRate, channels: settings.channelCount, interleaved: false)!",
+            "// PATCHED_CLEARHEAR_FORMAT_CONVERTER_CHANNELS\n            return AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: settings.sampleRate, channels: AVAudioChannelCount(settings.channelCount), interleaved: false)!",
+            1,
+        )
+
+    if "PATCHED_CLEARHEAR_FORMAT_CONVERTER_LOSSLESS" not in text:
+        text = text.replace(
+            "AVEncoderAudioQualityKey: AudioQuality.lossless.rawValue",
+            "// PATCHED_CLEARHEAR_FORMAT_CONVERTER_LOSSLESS\n                AVEncoderAudioQualityKey: AudioConversionSettings.AudioQuality.lossless.rawValue",
+            1,
+        )
+
+    if "PATCHED_CLEARHEAR_FORMAT_CONVERTER_FRAMECOUNT" not in text:
+        text = text.replace(
+            "let frameCount = AVAudioFrameCount(data.count / (format.streamDescription.pointee.mBytesPerFrame))",
+            "// PATCHED_CLEARHEAR_FORMAT_CONVERTER_FRAMECOUNT\n        let frameCount = AVAudioFrameCount(data.count / Int(format.streamDescription.pointee.mBytesPerFrame))",
+            1,
+        )
+
     return text
 
 def patch_vad(path: pathlib.Path, text: str) -> str:
@@ -235,6 +304,16 @@ def patch_vad(path: pathlib.Path, text: str) -> str:
     )
     return text
 
+def patch_vdsp_svesq(text: str, marker: str) -> str:
+    if marker in text:
+        return text
+    old = """        var sum: Float = 0.0
+        vDSP_vsq(samples, 1, &sum, vDSP_Length(samples.count))"""
+    new = f"""        // {marker}
+        var sum: Float = 0.0
+        vDSP_svesq(samples, 1, &sum, vDSP_Length(samples.count))"""
+    return text.replace(old, new, 1)
+
 def patch_audio_chunker(path: pathlib.Path, text: str) -> str:
     if "import Accelerate" not in text:
         text = text.replace(
@@ -242,6 +321,7 @@ def patch_audio_chunker(path: pathlib.Path, text: str) -> str:
             "import AVFoundation\nimport Accelerate\nimport os.log",
             1,
         )
+    text = patch_vdsp_svesq(text, "PATCHED_CLEARHEAR_AUDIO_CHUNKER_VDSP")
     if "PATCHED_CLEARHEAR_AUDIO_CHUNKER" in text:
         return text
     text = text.replace(
@@ -252,15 +332,68 @@ def patch_audio_chunker(path: pathlib.Path, text: str) -> str:
     return text
 
 def patch_streaming(path: pathlib.Path, text: str) -> str:
-    if "PATCHED_CLEARHEAR_STREAMING" in text:
-        return text
-    old = """        let chunkSize = Int(chunkDuration * sampleRate)
-        if audioBuffer.count >= chunkSize {"""
-    new = """        // PATCHED_CLEARHEAR_STREAMING
-        let chunkSize = Int(chunkDuration * sampleRate * Double(MemoryLayout<Float>.size))
-        if audioBuffer.count >= chunkSize {"""
-    if old in text:
-        return text.replace(old, new, 1)
+    if "import Accelerate" not in text:
+        text = text.replace(
+            "import AVFoundation\nimport os.log",
+            "import AVFoundation\nimport Accelerate\nimport os.log",
+            1,
+        )
+    text = patch_vdsp_svesq(text, "PATCHED_CLEARHEAR_STREAMING_VDSP")
+
+    if "PATCHED_CLEARHEAR_STREAMING_CHUNKSIZE" not in text:
+        replacements = [
+            (
+                "        let chunkSize = Int(chunkDuration * sampleRate)\n        if audioBuffer.count >= chunkSize {",
+                "        // PATCHED_CLEARHEAR_STREAMING_CHUNKSIZE\n        let chunkSize = Int(chunkDuration * sampleRate * Double(MemoryLayout<Float>.size))\n        if audioBuffer.count >= chunkSize {",
+            ),
+            (
+                "        let chunkSize = Int(chunkDuration * sampleRate * MemoryLayout<Float>.size)\n        if audioBuffer.count >= chunkSize {",
+                "        // PATCHED_CLEARHEAR_STREAMING_CHUNKSIZE\n        let chunkSize = Int(chunkDuration * sampleRate * Double(MemoryLayout<Float>.size))\n        if audioBuffer.count >= chunkSize {",
+            ),
+        ]
+        for old, new in replacements:
+            if old in text:
+                text = text.replace(old, new, 1)
+                break
+        text = text.replace(
+            "audioBuffer.removeFirst(chunkSize - Int(overlapDuration * sampleRate * MemoryLayout<Float>.size))",
+            "audioBuffer.removeFirst(chunkSize - Int(overlapDuration * sampleRate * Double(MemoryLayout<Float>.size)))",
+            1,
+        )
+
+    if "PATCHED_CLEARHEAR_STREAMING_TIMESTAMP" not in text:
+        text = text.replace(
+            "                timestamp: time.timeIntervalSince1970,",
+            "                // PATCHED_CLEARHEAR_STREAMING_TIMESTAMP\n                timestamp: Date().timeIntervalSince1970,",
+            1,
+        )
+
+    if "PATCHED_CLEARHEAR_STREAMING_PROCESSING_TIME" not in text:
+        old = """            if var transcriptionResult = result {
+                transcriptionResult.processingTime = processingTime
+                self?.processedTranscriptions.append(transcriptionResult)
+
+                DispatchQueue.main.async {
+                    self?.delegate?.audioProcessor(self!, didProcessAudioChunk: chunk, transcription: transcriptionResult)
+                }"""
+        new = """            // PATCHED_CLEARHEAR_STREAMING_PROCESSING_TIME
+            if let transcriptionResult = result {
+                let updatedResult = TranscriptionResult(
+                    text: transcriptionResult.text,
+                    segments: transcriptionResult.segments,
+                    confidence: transcriptionResult.confidence,
+                    language: transcriptionResult.language,
+                    timestamp: transcriptionResult.timestamp,
+                    processingTime: processingTime
+                )
+                self?.processedTranscriptions.append(updatedResult)
+
+                DispatchQueue.main.async {
+                    self?.delegate?.audioProcessor(self!, didProcessAudioChunk: chunk, transcription: updatedResult)
+                }"""
+        if old in text:
+            text = text.replace(old, new, 1)
+
     return text
 
 def patch_audio_preprocessor(path: pathlib.Path, text: str) -> str:
@@ -291,6 +424,17 @@ def patch_audio_preprocessor(path: pathlib.Path, text: str) -> str:
     )
     return text
 
+def patch_podspec(pub_cache: pathlib.Path) -> None:
+    for path in sorted(pub_cache.glob("hosted/pub.dev/whisper_kit-*/ios/whisper_kit.podspec")):
+        text = read(path)
+        if "PATCHED_CLEARHEAR_PODSPEC" in text:
+            continue
+        old = "s.source_files     = 'Classes/**/*', 'src/**/*.{h,cpp}'"
+        new = "s.source_files     = 'Classes/**/*', 'src/**/*.{h,cpp,c}'  # PATCHED_CLEARHEAR_PODSPEC: include ggml.c"
+        if old not in text:
+            continue
+        write(path, text.replace(old, new, 1))
+
 patchers = {
     "WhisperKitPlugin.h": patch_plugin_header,
     "WhisperKitWrapper.mm": patch_wrapper,
@@ -311,6 +455,8 @@ for path in files:
     updated = patchers[path.name](path, original)
     if updated != original:
         write(path, updated)
+
+patch_podspec(pub_cache)
 
 print("Done.")
 PY
