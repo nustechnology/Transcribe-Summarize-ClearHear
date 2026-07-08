@@ -150,6 +150,13 @@ class SessionRepositoryImpl implements SessionRepository {
     return count;
   }
 
+  @override
+  Future<void> deleteAllSessions() async {
+    final db = await _db.database;
+    await db.delete('sessions');
+    debugPrint('[SessionRepo] Deleted all sessions');
+  }
+
   // ── SEARCH ─────────────────────────────────────────────────────────────────
 
   @override

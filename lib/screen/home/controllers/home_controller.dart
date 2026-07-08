@@ -8,23 +8,28 @@ import 'package:get/get.dart';
 import '../../../model/conversation_segment.dart';
 import '../../../model/transcript_segment_entry.dart';
 import '../../../lang/string_keys.dart';
+import '../../../arch/repository/settings_repository.dart';
 import '../../../service/audio_recorder_service.dart';
 import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
 import '../../../service/whisper_kit_service.dart';
+import '../../../shared/caption_size_config.dart';
 
 class HomeController extends GetxController {
   HomeController({
+    SettingsRepository? settingsRepository,
     WhisperKitService? whisperKitService,
     LlamaService? llamaService,
     AudioRecorderService? audioRecorderService,
     LiveTranscriptService? liveTranscriptService,
-  })  : _whisperKitService = whisperKitService ?? WhisperKitService(),
+  })  : _settingsRepository = settingsRepository,
+        _whisperKitService = whisperKitService ?? WhisperKitService(),
         _llamaService = llamaService ?? LlamaService(),
         _audioRecorderService =
             audioRecorderService ?? AudioRecorderService(),
         _liveTranscriptService = liveTranscriptService;
 
+  final SettingsRepository? _settingsRepository;
   final WhisperKitService _whisperKitService;
   final LlamaService _llamaService;
   final AudioRecorderService _audioRecorderService;
@@ -44,7 +49,8 @@ class HomeController extends GetxController {
   final isFinishingTranscript = false.obs;
   final isPaused = false.obs;
   final captioningElapsed = Duration.zero.obs;
-  final transcriptFontSize = 18.0.obs;
+  final defaultCaptionFontSize = CaptionSizeConfig.defaultSize.obs;
+  final transcriptFontSize = CaptionSizeConfig.defaultSize.obs;
   final statusMessage = ''.obs;
   final isAsrModelReady = false.obs;
   final isAsrModelLoading = true.obs;
@@ -65,6 +71,32 @@ class HomeController extends GetxController {
   void onInit() {
     super.onInit();
     unawaited(_preloadAsrModel());
+    unawaited(_loadDefaultCaptionFontSize());
+  }
+
+  Future<void> _loadDefaultCaptionFontSize() async {
+    final repository = _settingsRepository;
+    if (repository == null) return;
+
+    try {
+      final settings = await repository.loadSettings();
+      updateDefaultCaptionFontSize(settings.fontSize);
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Failed to load caption font size: $error');
+      debugPrint('$stackTrace');
+    }
+  }
+
+  /// Updates the persisted default and applies it when no live session is active.
+  void updateDefaultCaptionFontSize(double size) {
+    defaultCaptionFontSize.value = size;
+    if (!isCaptioning.value) {
+      transcriptFontSize.value = size;
+    }
+  }
+
+  void _resetCaptionFontSize() {
+    transcriptFontSize.value = defaultCaptionFontSize.value;
   }
 
   Future<void> _preloadAsrModel() async {
@@ -122,6 +154,7 @@ class HomeController extends GetxController {
       isPaused.value = false;
       isPausing.value = false;
       captioningElapsed.value = Duration.zero;
+      transcriptFontSize.value = defaultCaptionFontSize.value;
       _captioningStartedAt = DateTime.now();
       _startDurationTimer();
 
@@ -157,6 +190,7 @@ class HomeController extends GetxController {
     isPausing.value = false;
     isFinishingTranscript.value = true;
     _stopDurationTimer();
+    _resetCaptionFontSize();
 
     final liveTranscript = _activeLiveTranscript;
     _activeLiveTranscript = null;
@@ -332,14 +366,16 @@ class HomeController extends GetxController {
   }
 
   void increaseFontSize() {
-    if (transcriptFontSize.value < 36) {
-      transcriptFontSize.value += 2;
+    if (!isCaptioning.value) return;
+    if (transcriptFontSize.value < CaptionSizeConfig.max) {
+      transcriptFontSize.value += CaptionSizeConfig.step;
     }
   }
 
   void decreaseFontSize() {
-    if (transcriptFontSize.value > 16) {
-      transcriptFontSize.value -= 2;
+    if (!isCaptioning.value) return;
+    if (transcriptFontSize.value > CaptionSizeConfig.min) {
+      transcriptFontSize.value -= CaptionSizeConfig.step;
     }
   }
 
