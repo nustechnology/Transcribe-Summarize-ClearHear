@@ -98,6 +98,7 @@ Summarization is commented out in `pubspec.yaml`. To enable later:
 | Issue | What to do |
 |-------|------------|
 | Android: `flutter_llama` CMake / `llama_context_type` errors | Run `bash tool/setup_flutter_llama_android.sh` after `pub get`, then rebuild. |
+| Android: CMake 3.19+ / `SPIRV-Headers` (`ggml-vulkan`) errors | Run `bash tool/setup_flutter_llama_android.sh` after `pub get` (disables Vulkan, uses CPU backend). Install CMake 3.22+ via Android SDK Manager if prompted. |
 | `version solving failed` / `json_annotation` | Run `fvm flutter pub get` with the Flutter version from `.fvmrc` (currently **3.44.4**), not a global SDK. |
 | iOS: undefined symbol `_ggml_*` | Run `bash tool/patch_whisper_kit_ios.sh`, then `cd ios && pod install`. |
 | iOS: duplicate interface for `WhisperKitPlugin` | Run `bash tool/patch_whisper_kit_ios.sh` after `pub get`. |
