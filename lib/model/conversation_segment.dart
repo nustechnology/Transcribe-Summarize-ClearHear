@@ -3,12 +3,14 @@ class ConversationSegment {
   ConversationSegment({
     required this.id,
     required this.wavPath,
+    required this.recordedAt,
     this.liveText = '',
     this.whisperText = '',
   });
 
   final int id;
   final String wavPath;
+  final DateTime recordedAt;
   final String liveText;
   String whisperText;
 
