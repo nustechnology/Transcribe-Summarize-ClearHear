@@ -31,7 +31,6 @@ class OptionsRow extends GetView<HomeController> {
                 icon: Icons.language,
                 iconColor: AppColors.primary,
                 labelKey: StringKeys.homeLanguageEnglish,
-                showChevron: true,
               ),
             ),
           ],
@@ -45,7 +44,6 @@ class OptionsRow extends GetView<HomeController> {
               icon: Icons.language,
               iconColor: AppColors.primary,
               labelKey: StringKeys.homeLanguageEnglish,
-              showChevron: true,
             ),
           ),
           SizedBox(width: 12),
@@ -68,7 +66,6 @@ class _OptionChip extends StatelessWidget {
     required this.icon,
     required this.labelKey,
     this.trailingKey,
-    this.showChevron = false,
     this.iconColor,
     this.trailingColor,
   });
@@ -76,7 +73,6 @@ class _OptionChip extends StatelessWidget {
   final IconData icon;
   final String labelKey;
   final String? trailingKey;
-  final bool showChevron;
   final Color? iconColor;
   final Color? trailingColor;
 
@@ -85,9 +81,9 @@ class _OptionChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+        border: Border.all(color: AppColors.privacyBg),
       ),
       child: Row(
         children: [
@@ -112,12 +108,6 @@ class _OptionChip extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 color: trailingColor ?? AppColors.confidenceBlue,
               ),
-            ),
-          if (showChevron)
-            const Icon(
-              Icons.keyboard_arrow_down,
-              size: 20,
-              color: AppColors.textMuted,
             ),
         ],
       ),

@@ -1,142 +1,84 @@
 # ClearHear (Transcribe-Summarize-ClearHear)
 
-On-device live captioning for Flutter. Records conversation in speech segments, then transcribes each segment locally with **whisper_kit** (whisper.cpp). Summarization via `flutter_llama` is prepared but currently disabled in `pubspec.yaml`.
+On-device live captioning for Flutter. Records speech in segments, transcribes locally with **whisper_kit**, and summarizes with **flutter_llama**.
 
 State management: **GetX**.
 
 ## Requirements
 
-| Tool | Version / notes |
-|------|-----------------|
-| [FVM](https://fvm.app) | Recommended — project pins Flutter in `.fvmrc` |
-| Flutter | Must match `.fvmrc` (currently **3.44.4**); `fvm install` / `fvm use` apply that pin |
-| Dart | Bundled with the FVM Flutter SDK above — do not pair a separate global `dart` with this project |
-| Xcode | iOS builds (macOS only) |
-| CocoaPods | `pod install` in `ios/` |
-| Internet | **First run only** — downloads Whisper `tiny` model (~75 MB) |
+| Tool | Notes |
+|------|-------|
+| [FVM](https://fvm.app) | Project pins Flutter in `.fvmrc` (currently **3.44.4**) |
+| Xcode + CocoaPods | iOS builds (macOS only) |
+| Android SDK | NDK + CMake **3.22+** (Android SDK Manager) |
+| Internet | First run only — downloads Whisper `tiny` (~75 MB) |
 
-### Platform targets
-
-| Platform | Status |
-|----------|--------|
-| Android | Supported |
-| iOS | Supported (requires iOS patch below) |
-| macOS | Experimental (`whisper_kit`) |
-
-Microphone permission is already declared in `android/app/src/main/AndroidManifest.xml` and `ios/Runner/Info.plist`.
+Microphone permission is declared in `android/app/src/main/AndroidManifest.xml` and `ios/Runner/Info.plist`.
 
 ## First-time setup
 
 From the project root:
 
 ```bash
-# 1. Install the Flutter version from .fvmrc
-fvm install
-fvm use
-
-# 2. Dependencies
+fvm install && fvm use
 fvm flutter pub get
 
-# 3. Android — sync flutter_llama llama.cpp headers (run after every pub get)
+# Android — required after every pub get
 bash tool/setup_flutter_llama_android.sh
 
-# 4. iOS only — fix whisper_kit Swift compile errors (run after every pub get)
+# iOS — required after every pub get
 bash tool/patch_whisper_kit_ios.sh
-
-# 5. iOS only — CocoaPods
 cd ios && pod install && cd ..
 ```
 
-Always prefix Flutter commands with `fvm` (or use `fvm flutter` as your default) so the SDK matches `.fvmrc`. A global `flutter` outside that pin (e.g. an older install while `.fvmrc` specifies **3.44.4**) can cause dependency resolution failures.
+Use `fvm flutter` (not a global Flutter SDK) so the version matches `.fvmrc`.
 
-## Run the app
+## Run
 
 ```bash
 fvm flutter run
 ```
 
-Use a **full rebuild** after adding native plugins or running `pub get` — avoid hot reload for mic / ML changes.
+Use a **full rebuild** after `pub get` or native plugin changes — not hot reload.
 
-```bash
-# Example: run on a connected device
-fvm flutter run -d <device_id>
+## Models
 
-# List devices
-fvm flutter devices
-```
+Defaults are in `lib/config/ml_model_config.dart`:
 
-## Whisper model
+| Feature | Default |
+|---------|---------|
+| Transcription | Whisper `tiny`, English |
+| Summarization | Qwen2.5-0.5B-Instruct (GGUF via `flutter_llama`) |
+| Segment pause | 1.2 s silence between utterances |
 
-No manual model download script is required. On first transcription, `whisper_kit` downloads **Whisper tiny** to app storage (Hugging Face). After that, transcription works offline.
-
-Defaults live in `lib/config/ml_model_config.dart`:
-
-- Model: `tiny` (fastest, ~75 MB)
-- Language: `auto`
-- Segment pause: `1.2` s silence between utterances
-
-To use a larger model (better accuracy, slower), change `whisperModelName` to `base` or `small` in that file.
-
-> **Note:** `whisper_kit` is constrained to **^0.3.0** in `pubspec.yaml`. Version **0.3.1** only requires Dart `>=3.3.0` (already satisfied by the Flutter SDK in `.fvmrc`), so SDK version is not the upgrade blocker — iOS builds depend on `tool/patch_whisper_kit_ios.sh`, which targets the 0.3.x plugin sources. Re-run and update that patch before bumping the package.
+Whisper downloads automatically on first use, then works offline. Change `whisperModelName` to `base` or `small` for better accuracy at the cost of speed.
 
 ## Captioning flow
 
-1. **Start captioning** — mic streams PCM; segments are saved as WAV when silence is detected.
-2. **Stop** — each segment is transcribed with Whisper in the background; results are written to the debug log (not the UI).
-3. Watch logs: `[LiveTranscript]`, `[WhisperKit]`, `[Transcribe]`.
+1. **Start** — mic streams PCM; segments save as WAV when silence is detected.
+2. **Stop** — each segment is transcribed in the background; text appears in the UI.
+3. **Summarize** — optional summary via on-device LLM.
 
-## Optional: summarization (flutter_llama)
-
-Summarization is commented out in `pubspec.yaml`. To enable later:
-
-1. Uncomment `flutter_llama` in `pubspec.yaml`.
-2. Run `bash tool/setup_flutter_llama_android.sh` after `pub get` (syncs llama.cpp headers for Android).
-3. Add the summary GGUF model per `MlModelConfig` in `lib/config/ml_model_config.dart`.
+Debug logs: `[LiveTranscript]`, `[WhisperKit]`, `[Transcribe]`.
 
 ## Troubleshooting
 
-| Issue | What to do |
-|-------|------------|
-| Android: `flutter_llama` CMake / `llama_context_type` errors | Run `bash tool/setup_flutter_llama_android.sh` after `pub get`, then rebuild. |
-| `version solving failed` / `json_annotation` | Run `fvm flutter pub get` with the Flutter version from `.fvmrc` (currently **3.44.4**), not a global SDK. |
-| iOS: undefined symbol `_ggml_*` | Run `bash tool/patch_whisper_kit_ios.sh`, then `cd ios && pod install`. |
-| iOS: duplicate interface for `WhisperKitPlugin` | Run `bash tool/patch_whisper_kit_ios.sh` after `pub get`. |
-| iOS: `UnsafeMutablePointer<CChar>?` must be unwrapped | Run `bash tool/patch_whisper_kit_ios.sh` after `pub get`. |
-| iOS: `AudioMetadata?` / `async` in `EnhancedAudioManager` | Same patch script as above. |
-| iOS: `VoiceActivityDetector` (`self`, vDSP, FFT) | Same patch script as above. |
-| `MissingPluginException` / mic unavailable | Stop the app and run a full rebuild (`fvm flutter run`), not hot reload. |
-| Whisper model download fails | Check network; retry on Wi‑Fi. |
-| ANR / UI freeze during ML | Ensure heavy work stays off the UI thread; rebuild with latest code. |
+| Issue | Fix |
+|-------|-----|
+| Android: `flutter_llama` / CMake errors | `bash tool/setup_flutter_llama_android.sh`, then full rebuild |
+| iOS: whisper_kit compile / linker errors | `bash tool/patch_whisper_kit_ios.sh`, then `cd ios && pod install` |
+| `version solving failed` | Use `fvm flutter pub get` with the Flutter version from `.fvmrc` |
+| `MissingPluginException` / mic unavailable | Full rebuild (`fvm flutter run`), not hot reload |
+| Whisper model download fails | Check network; retry on Wi‑Fi |
 
-## Project layout (app code)
+## Project layout
 
 ```text
 lib/
-  config/ml_model_config.dart   # Audio + Whisper settings
-  service/
-    audio_recorder_service.dart   # Mic PCM stream
-    conversation_segment_capture.dart
-    live_transcript_service.dart  # Record segments → Whisper
-    whisper_kit_service.dart
-  screen/home/                    # Live caption UI
+  config/ml_model_config.dart
+  service/                    # Audio, Whisper, Llama
+  screen/home/                # Live caption UI
 tool/
-  setup_flutter_llama_android.sh  # Required Android patch for flutter_llama 1.1.2
-  patch_whisper_kit_ios.sh        # Required iOS patch for whisper_kit 0.3.0
+  setup_flutter_llama_android.sh
+  patch_whisper_kit_ios.sh
 ```
-
-## GetX patterns
-
-| Component | Purpose |
-|-----------|---------|
-| `GetMaterialApp` | App root with GetX routing |
-| `GetPage` + `AppPages` | Route declarations |
-| `Bindings` | Inject controllers per route |
-| `GetxController` + `.obs` | Reactive state |
-| `GetView<T>` | Screen bound to a controller |
-| `Obx()` | Rebuild when observables change |
-
-## Adding a new screen
-
-1. Create `lib/screen/<name>/` with `bindings/`, `controllers/`, and `<name>_widget.dart`
-2. Add a route constant in `AppRoutes` inside `arch/route/app_route.dart`
-3. Register a `GetPage` in `AppPages.routes` in the same file

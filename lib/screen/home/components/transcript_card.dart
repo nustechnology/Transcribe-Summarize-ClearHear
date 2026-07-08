@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../lang/string_keys.dart';
+import '../../../model/transcript_segment_entry.dart';
 import '../../../style/theme.dart';
+import '../../../util/asr_text_util.dart';
 import '../controllers/home_controller.dart';
 
 class TranscriptCard extends GetView<HomeController> {
@@ -32,7 +34,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
   void initState() {
     super.initState();
     _transcriptWorker =
-        ever(widget.controller.transcript, (_) => _scrollToBottom());
+        ever(widget.controller.transcriptSegments, (_) => _scrollToBottom());
     _summaryWorker = ever(widget.controller.summary, (_) => _scrollToBottom());
   }
 
@@ -65,24 +67,33 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
 
     return Obx(() {
       final isCaptioning = controller.isCaptioning.value;
+      final isPaused = controller.isPaused.value;
       final isProcessing = controller.isProcessing.value;
+      final isFinishingTranscript = controller.isFinishingTranscript.value;
       final transcript = controller.transcript.value;
+      final transcriptSegments = controller.transcriptSegments.toList();
       final summary = controller.summary.value.trim();
       final statusMessage = controller.statusMessage.value;
       final fontSize = controller.transcriptFontSize.value;
+      final pausedDuration = controller.formattedCaptioningElapsed;
+      final isPausing = controller.isPausing.value;
+      final hasTranscript =
+          transcript.trim().isNotEmpty || transcriptSegments.isNotEmpty;
+      final showActiveCard =
+          isCaptioning || isFinishingTranscript || hasTranscript;
 
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isCaptioning
+          color: showActiveCard
               ? AppColors.surface
               : AppColors.background.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(16),
-          border: isCaptioning
+          border: showActiveCard
               ? Border.all(color: AppColors.border.withValues(alpha: 0.5))
               : null,
-          boxShadow: isCaptioning
+          boxShadow: showActiveCard
               ? [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.04),
@@ -94,11 +105,16 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
         ),
         child: _buildContent(
           isCaptioning: isCaptioning,
+          isPaused: isPaused,
           isProcessing: isProcessing,
+          isFinishingTranscript: isFinishingTranscript,
+          isPausing: isPausing,
           transcript: transcript,
+          transcriptSegments: transcriptSegments,
           summary: summary,
           statusMessage: statusMessage,
           fontSize: fontSize,
+          pausedDuration: pausedDuration,
         ),
       );
     });
@@ -106,13 +122,21 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
 
   Widget _buildContent({
     required bool isCaptioning,
+    required bool isPaused,
     required bool isProcessing,
+    required bool isFinishingTranscript,
+    required bool isPausing,
     required String transcript,
+    required List<TranscriptSegmentEntry> transcriptSegments,
     required String summary,
     required String statusMessage,
     required double fontSize,
+    required String pausedDuration,
   }) {
-    if (statusMessage.isNotEmpty) {
+    final hasTranscript =
+        transcript.trim().isNotEmpty || transcriptSegments.isNotEmpty;
+
+    if (statusMessage.isNotEmpty && !hasTranscript) {
       return Align(
         alignment: Alignment.topCenter,
         child: Text(
@@ -128,77 +152,43 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     }
 
     if (isCaptioning ||
+        isFinishingTranscript ||
         isProcessing ||
-        transcript.trim().isNotEmpty ||
+        hasTranscript ||
         summary.isNotEmpty) {
-      return SingleChildScrollView(
-        controller: _scrollController,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      final transcriptBody = _buildTranscriptScrollContent(
+        isCaptioning: isCaptioning,
+        isPaused: isPaused,
+        isProcessing: isProcessing,
+        isFinishingTranscript: isFinishingTranscript,
+        isPausing: isPausing,
+        transcript: transcript,
+        transcriptSegments: transcriptSegments,
+        summary: summary,
+        fontSize: fontSize,
+        pausedDuration: pausedDuration,
+      );
+
+      if (statusMessage.isNotEmpty) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              StringKeys.homeSpeakerLabel.tr,
+              StringKeys.t(statusMessage),
+              textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.statusIdle,
-                letterSpacing: 0.8,
+                fontSize: 14,
+                color: Color(0xFFE53935),
+                height: 1.4,
               ),
             ),
             const SizedBox(height: 12),
-            if (isProcessing)
-              Text(
-                StringKeys.homeProcessing.tr,
-                style: TextStyle(
-                  fontSize: fontSize,
-                  fontStyle: FontStyle.italic,
-                  color: AppColors.textSecondary,
-                  height: 1.4,
-                ),
-              )
-            else if (transcript.trim().isNotEmpty)
-              Text(
-                transcript,
-                style: TextStyle(
-                  fontSize: fontSize,
-                  color: AppColors.textPrimary,
-                  height: 1.4,
-                ),
-              )
-            else
-              Text(
-                StringKeys.homeListening.tr,
-                style: TextStyle(
-                  fontSize: fontSize,
-                  fontStyle: FontStyle.italic,
-                  color: AppColors.textSecondary,
-                  height: 1.4,
-                ),
-              ),
-            if (summary.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              Text(
-                StringKeys.homeSummaryLabel.tr,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.statusIdle,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                summary,
-                style: TextStyle(
-                  fontSize: fontSize - 4,
-                  color: AppColors.textSecondary,
-                  height: 1.4,
-                ),
-              ),
-            ],
+            Expanded(child: transcriptBody),
           ],
-        ),
-      );
+        );
+      }
+
+      return transcriptBody;
     }
 
     return Center(
@@ -240,6 +230,291 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTranscriptScrollContent({
+    required bool isCaptioning,
+    required bool isPaused,
+    required bool isProcessing,
+    required bool isFinishingTranscript,
+    required bool isPausing,
+    required String transcript,
+    required List<TranscriptSegmentEntry> transcriptSegments,
+    required String summary,
+    required double fontSize,
+    required String pausedDuration,
+  }) {
+    if (isPaused) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: _PausedHeader(
+              status: StringKeys.homeStatusPaused.tr,
+              duration: pausedDuration,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SpeakerBadge(),
+                  const SizedBox(height: 12),
+                  _TranscriptSegmentsView(
+                    transcript: transcript,
+                    transcriptSegments: transcriptSegments,
+                    fontSize: fontSize,
+                    showProcessingTail: isPausing,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return SingleChildScrollView(
+      controller: _scrollController,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SpeakerBadge(),
+          const SizedBox(height: 12),
+          if (isProcessing && summary.isEmpty)
+            Text(
+              StringKeys.homeProcessing.tr,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontStyle: FontStyle.italic,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            )
+          else
+            _TranscriptSegmentsView(
+              transcript: transcript,
+              transcriptSegments: transcriptSegments,
+              fontSize: fontSize,
+              showProcessingTail: isFinishingTranscript,
+              showListeningWhenEmpty: isCaptioning && !isPaused,
+            ),
+          if (summary.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Text(
+              StringKeys.homeSummaryLabel.tr,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.statusIdle,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              summary,
+              style: TextStyle(
+                fontSize: fontSize - 4,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TranscriptSegmentsView extends StatelessWidget {
+  const _TranscriptSegmentsView({
+    required this.transcript,
+    required this.transcriptSegments,
+    required this.fontSize,
+    this.showProcessingTail = false,
+    this.showListeningWhenEmpty = false,
+  });
+
+  final String transcript;
+  final List<TranscriptSegmentEntry> transcriptSegments;
+  final double fontSize;
+  final bool showProcessingTail;
+  final bool showListeningWhenEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final processingStyle = TextStyle(
+      fontSize: fontSize,
+      fontStyle: FontStyle.italic,
+      color: AppColors.textSecondary,
+      height: 1.4,
+    );
+    final listeningStyle = processingStyle;
+
+    if (transcriptSegments.isEmpty && !showProcessingTail) {
+      if (transcript.trim().isNotEmpty) {
+        return _SegmentTranscriptText(
+          segments: [
+            TranscriptSegmentEntry(
+              text: transcript.trim(),
+              recordedAt: DateTime.now(),
+            ),
+          ],
+          fontSize: fontSize,
+          showTime: false,
+        );
+      }
+
+      if (showListeningWhenEmpty) {
+        return Text(StringKeys.homeListening.tr, style: listeningStyle);
+      }
+
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (transcriptSegments.isNotEmpty)
+          _SegmentTranscriptText(
+            segments: transcriptSegments,
+            fontSize: fontSize,
+          ),
+        if (showProcessingTail) ...[
+          if (transcriptSegments.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.border.withValues(alpha: 0.8),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Text(StringKeys.homeProcessing.tr, style: processingStyle),
+        ] else if (transcriptSegments.isEmpty && showListeningWhenEmpty)
+          Text(StringKeys.homeListening.tr, style: listeningStyle),
+      ],
+    );
+  }
+}
+
+class _SegmentTranscriptText extends StatelessWidget {
+  const _SegmentTranscriptText({
+    required this.segments,
+    required this.fontSize,
+    this.showTime = true,
+  });
+
+  final List<TranscriptSegmentEntry> segments;
+  final double fontSize;
+  final bool showTime;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = TextStyle(
+      fontSize: fontSize,
+      color: AppColors.textPrimary,
+      height: 1.4,
+    );
+    final timeStyle = TextStyle(
+      fontSize: fontSize - 6,
+      fontWeight: FontWeight.w500,
+      color: AppColors.textSecondary,
+      height: 1.2,
+    );
+
+    if (segments.length == 1 && !showTime) {
+      return Text(segments.first.text, style: textStyle);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < segments.length; i++) ...[
+          if (i > 0) ...[
+            const SizedBox(height: 12),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.border.withValues(alpha: 0.8),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Row(
+            children: [
+              const Spacer(),
+              Text(
+                formatSegmentClockTime(segments[i].recordedAt),
+                style: timeStyle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(segments[i].text, style: textStyle),
+        ],
+      ],
+    );
+  }
+}
+
+class _SpeakerBadge extends StatelessWidget {
+  const _SpeakerBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        StringKeys.homeSpeakerLabel.tr,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.background,
+        ),
+      ),
+    );
+  }
+}
+
+class _PausedHeader extends StatelessWidget {
+  const _PausedHeader({
+    required this.status,
+    required this.duration,
+  });
+
+  final String status;
+  final String duration;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF9ED2D0),
+        ),
+      ),
+      child: Text(
+        '$status  •  $duration',
+        style: const TextStyle(
+          fontSize: 12,
+          color: Color(0xFF2C6B73),
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }

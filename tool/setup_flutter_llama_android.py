@@ -9,50 +9,144 @@ from __future__ import annotations
 import os
 import pathlib
 import shutil
+import subprocess
 import sys
-import urllib.error
-import urllib.request
+
+
+def ensure_llama_tree(source: pathlib.Path, destination: pathlib.Path) -> None:
+    if destination.is_symlink():
+        destination.unlink()
+    if destination.exists():
+        return
+    print(f"Bootstrapping {destination} from {source} ...")
+    shutil.copytree(source, destination, symlinks=True)
 
 
 def main() -> int:
     pub_cache = pathlib.Path(os.environ.get("PUB_CACHE", pathlib.Path.home() / ".pub-cache"))
-    upstream_base = os.environ.get(
-        "LLAMA_UPSTREAM_BASE",
-        "https://raw.githubusercontent.com/ggml-org/llama.cpp/master",
-    ).rstrip("/")
+    project_root = pathlib.Path(__file__).resolve().parents[1]
+    third_party_llama = project_root / "third_party" / "llama.cpp"
     marker = "PATCHED_CLEARHEAR_ANDROID_LLAMA_H"
+    cmake_marker = "PATCHED_CLEARHEAR_DISABLE_VULKAN"
+    cmake_gpu_block = """# GPU Acceleration for Android devices
+# Vulkan for modern devices (Android 7.0+)
+# OpenCL as fallback for older devices
+# CPU backend with NEON as last resort
 
-    plugin_roots = sorted(pub_cache.glob("hosted/pub.dev/flutter_llama-*/llama.cpp"))
-    if not plugin_roots:
-        print("No flutter_llama llama.cpp tree found in pub-cache. Run 'flutter pub get' first.")
+# Try to enable Vulkan (best performance on modern devices)
+find_library(vulkan-lib vulkan)
+if(vulkan-lib)
+    set(GGML_VULKAN ON CACHE BOOL "" FORCE)
+    message(STATUS "🚀 Vulkan GPU acceleration ENABLED")
+    message(STATUS "   Supported: Adreno 5xx+, Mali-G71+, Samsung Exynos 9+")
+    message(STATUS "   Expected: 4-8x faster than CPU")
+else()
+    # Try OpenCL as fallback
+    find_library(opencl-lib OpenCL)
+    if(opencl-lib)
+        set(GGML_OPENCL ON CACHE BOOL "" FORCE)
+        message(STATUS "⚡ OpenCL GPU acceleration ENABLED (fallback)")
+        message(STATUS "   Supported: Most Android devices with GPU")
+        message(STATUS "   Expected: 2-5x faster than CPU")
+    else()
+        message(STATUS "⚡ Using optimized CPU backend with ARM NEON")
+        message(STATUS "   GPU libraries not found, falling back to CPU")
+    endif()
+endif()"""
+    cmake_cpu_block = f"""# {cmake_marker}
+# Upstream llama.cpp Vulkan builds need host SPIRV-Headers (not in the Android SDK).
+# Use the ARM NEON CPU backend until GPU build deps are vendored.
+message(STATUS "⚡ Using optimized CPU backend with ARM NEON")
+message(STATUS "   Vulkan/OpenCL disabled for Android NDK compatibility")"""
+
+    plugin_dirs = sorted(pub_cache.glob("hosted/pub.dev/flutter_llama-*"))
+    if not plugin_dirs:
+        print("No flutter_llama package found in pub-cache. Run 'flutter pub get' first.")
         return 0
 
-    def fetch(path: str) -> str:
-        url = f"{upstream_base}/{path}"
+    # flutter_llama expects <plugin>/llama.cpp to exist, but pub.dev can ship it
+    # as a missing/broken symlink. Keep a local upstream checkout for header sync.
+    if not third_party_llama.exists():
+        third_party_llama.parent.mkdir(parents=True, exist_ok=True)
+        clone_cmd = [
+            "git",
+            "clone",
+            "--depth",
+            "1",
+            "https://github.com/ggml-org/llama.cpp.git",
+            str(third_party_llama),
+        ]
+        print(f"Bootstrapping llama.cpp at {third_party_llama} ...")
         try:
-            return urllib.request.urlopen(url, timeout=60).read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(f"Failed to fetch {url}: {exc}") from exc
+            subprocess.run(clone_cmd, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            raise RuntimeError(
+                "Check network access and that git is installed, then rerun "
+                "tool/setup_flutter_llama_android.py."
+            ) from exc
 
-    def upstream_path(header_name: str, target_dir_name: str) -> str:
-        if header_name.startswith("llama"):
-            return f"include/{header_name}"
-        if target_dir_name == "include":
-            return f"ggml/include/{header_name}"
-        return f"ggml/include/{header_name}"
+    plugin_roots: list[pathlib.Path] = []
+    for plugin_dir in plugin_dirs:
+        plugin_llama = plugin_dir / "llama.cpp"
+        if plugin_llama.is_symlink() and not plugin_llama.exists():
+            plugin_llama.unlink()
+        ensure_llama_tree(third_party_llama, plugin_llama)
+        plugin_roots.append(plugin_llama)
+
+        cmake_lists = plugin_dir / "android" / "src" / "main" / "cpp" / "CMakeLists.txt"
+        if cmake_lists.is_file():
+            cmake_text = cmake_lists.read_text(encoding="utf-8")
+            if cmake_marker not in cmake_text:
+                if cmake_gpu_block not in cmake_text:
+                    print(
+                        f"WARNING: GPU CMake anchor not found in {cmake_lists}; "
+                        "Vulkan disable patch was NOT applied."
+                    )
+                else:
+                    cmake_lists.write_text(
+                        cmake_text.replace(cmake_gpu_block, cmake_cpu_block, 1),
+                        encoding="utf-8",
+                    )
+                    print(f"Patched: {cmake_lists} (CPU-only backend)")
+
+    def read_upstream(path: str) -> str:
+        local_path = third_party_llama / path
+        if not local_path.is_file():
+            raise RuntimeError(
+                f"Missing upstream file: {local_path}\n"
+                f"Remove {third_party_llama} and rerun this script to re-clone llama.cpp."
+            )
+        return local_path.read_text(encoding="utf-8")
 
     for root in plugin_roots:
-        for rel_dir in ("include", "ggml/include"):
-            target_dir = root / rel_dir
-            if not target_dir.is_dir():
-                continue
+        include_dir = root / "include"
+        ggml_include_dir = root / "ggml" / "include"
 
-            for header in sorted(target_dir.glob("*.h")):
-                rel_path = upstream_path(header.name, rel_dir)
-                upstream = fetch(rel_path)
+        if include_dir.is_dir():
+            for header in sorted(include_dir.glob("*.h")):
+                if not header.name.startswith("llama"):
+                    continue
+                rel_path = f"include/{header.name}"
+                upstream = read_upstream(rel_path)
                 if header.name == "llama.h":
-                    upstream = f"// {marker}\n{upstream}"
+                    upstream = "\n".join(
+                        line for line in upstream.splitlines() if line != f"// {marker}"
+                    )
+                    if marker not in upstream:
+                        upstream = f"// {marker}\n{upstream}"
                 header.write_text(upstream, encoding="utf-8")
+                print(f"Synced: {header} <- {rel_path}")
+
+            for duplicate in sorted(include_dir.glob("*.h")):
+                if duplicate.name.startswith("llama"):
+                    continue
+                duplicate.unlink()
+                print(f"Removed duplicate header: {duplicate}")
+
+        if ggml_include_dir.is_dir():
+            for header in sorted(ggml_include_dir.glob("*.h")):
+                rel_path = f"ggml/include/{header.name}"
+                header.write_text(read_upstream(rel_path), encoding="utf-8")
                 print(f"Synced: {header} <- {rel_path}")
 
         context_cpp = root / "src" / "llama-context.cpp"

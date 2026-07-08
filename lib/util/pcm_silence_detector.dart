@@ -8,7 +8,7 @@ class PcmSilenceDetector {
   PcmSilenceDetector({
     int sampleRate = MlModelConfig.audioSampleRate,
     double pauseSilenceSeconds = MlModelConfig.pauseSilenceSeconds,
-    this.speechRmsThreshold = 550,
+    this.speechRmsThreshold = 350,
   })  : _pauseSampleCount = (sampleRate * pauseSilenceSeconds).round();
 
   final int speechRmsThreshold;

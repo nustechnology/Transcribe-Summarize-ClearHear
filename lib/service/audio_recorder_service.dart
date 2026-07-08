@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:flutter/services.dart';
-import 'package:record/record.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../config/ml_model_config.dart';
 
@@ -9,25 +12,31 @@ typedef PcmChunkCallback = void Function(Uint8List chunk);
 
 /// Streams microphone PCM for conversation segment capture.
 class AudioRecorderService {
-  AudioRecorder? _recorder;
-  StreamSubscription<Uint8List>? _streamSubscription;
+  AudioRecorderService({RecorderController? recorderController})
+      : recorderController = recorderController ?? RecorderController();
+
+  final RecorderController recorderController;
+
+  StreamSubscription<Uint8List>? _chunkSubscription;
+  String? _recordingPath;
   bool _isStreaming = false;
 
-  static const streamConfig = RecordConfig(
-    encoder: AudioEncoder.pcm16bits,
+  static const recorderSettings = RecorderSettings(
+    androidEncoderSettings: AndroidEncoderSettings(
+      androidEncoder: AndroidEncoder.wav,
+    ),
+    iosEncoderSettings: IosEncoderSetting(
+      iosEncoder: IosEncoder.kAudioFormatLinearPCM,
+      linearPCMBitDepth: 16,
+      linearPCMIsFloat: false,
+      linearPCMIsBigEndian: false,
+    ),
     sampleRate: MlModelConfig.audioSampleRate,
-    numChannels: 1,
   );
-
-  Future<AudioRecorder> _ensureRecorder() async {
-    _recorder ??= AudioRecorder();
-    return _recorder!;
-  }
 
   Future<bool> ensurePermission() async {
     try {
-      final recorder = await _ensureRecorder();
-      return recorder.hasPermission();
+      return recorderController.checkPermission();
     } on MissingPluginException {
       rethrow;
     }
@@ -38,19 +47,33 @@ class AudioRecorderService {
   Future<void> startStreaming({required PcmChunkCallback onChunk}) async {
     if (_isStreaming) return;
 
-    final recorder = await _ensureRecorder();
-    final stream = await recorder.startStream(streamConfig);
-    _streamSubscription = stream.listen(onChunk);
+    final directory = await getTemporaryDirectory();
+    final path = p.join(
+      directory.path,
+      'caption_pcm_${DateTime.now().millisecondsSinceEpoch}.wav',
+    );
+    _recordingPath = path;
+
+    _chunkSubscription = recorderController.onAudioChunks.listen(onChunk);
+    await recorderController.record(path: path, recorderSettings: recorderSettings);
     _isStreaming = true;
   }
 
   Future<void> stopStreaming() async {
-    _streamSubscription?.cancel();
-    _streamSubscription = null;
+    await _chunkSubscription?.cancel();
+    _chunkSubscription = null;
 
-    final recorder = _recorder;
-    if (recorder != null && _isStreaming) {
-      await recorder.stop();
+    if (_isStreaming) {
+      await recorderController.stop();
+    }
+
+    final recordingPath = _recordingPath;
+    _recordingPath = null;
+    if (recordingPath != null) {
+      final recordingFile = File(recordingPath);
+      if (await recordingFile.exists()) {
+        await recordingFile.delete();
+      }
     }
 
     _isStreaming = false;
@@ -58,10 +81,6 @@ class AudioRecorderService {
 
   Future<void> dispose() async {
     await stopStreaming();
-    final recorder = _recorder;
-    _recorder = null;
-    if (recorder != null) {
-      await recorder.dispose();
-    }
+    recorderController.dispose();
   }
 }
