@@ -4,14 +4,6 @@ PODS:
     - Flutter
   - fluttertoast (0.0.2):
     - Flutter
-  - path_provider_foundation (0.0.1):
-    - Flutter
-    - FlutterMacOS
-  - record_ios (1.2.1):
-    - Flutter
-  - sqflite_darwin (0.0.4):
-    - Flutter
-    - FlutterMacOS
   - whisper_kit (0.0.1):
     - Flutter
     - whisper_kit/EnhancedAudio (= 0.0.1)
@@ -22,9 +14,6 @@ DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_llama (from `.symlinks/plugins/flutter_llama/ios`)
   - fluttertoast (from `.symlinks/plugins/fluttertoast/ios`)
-  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
-  - record_ios (from `.symlinks/plugins/record_ios/ios`)
-  - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
   - whisper_kit (from `.symlinks/plugins/whisper_kit/ios`)
 
 EXTERNAL SOURCES:
@@ -34,12 +23,6 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_llama/ios"
   fluttertoast:
     :path: ".symlinks/plugins/fluttertoast/ios"
-  path_provider_foundation:
-    :path: ".symlinks/plugins/path_provider_foundation/darwin"
-  record_ios:
-    :path: ".symlinks/plugins/record_ios/ios"
-  sqflite_darwin:
-    :path: ".symlinks/plugins/sqflite_darwin/darwin"
   whisper_kit:
     :path: ".symlinks/plugins/whisper_kit/ios"
 
@@ -47,10 +30,7 @@ SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_llama: 6e228198f708bc58cf75eabc96f0c5d0eedaced7
   fluttertoast: 2c67e14dce98bbdb200df9e1acf610d7a6264ea1
-  path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
-  record_ios: 980fd386a97a35987d0fce3dfda4b26a38c90f4c
-  sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
-  whisper_kit: 9229d5c2c7ba40f3bdf9238fee3d8a41c1ca9599
+  whisper_kit: a3d6076cab694aa0ed1f813fd663ef4099ca0af9
 
 PODFILE CHECKSUM: 4186260aa218c7e1f90232f65c0066bbcf7597dc
 
