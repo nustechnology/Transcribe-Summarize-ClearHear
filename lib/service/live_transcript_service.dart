@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../model/conversation_segment.dart';
+import '../util/asr_text_util.dart';
+import '../util/pcm_audio_util.dart';
 import '../util/pcm_silence_detector.dart';
 import 'audio_recorder_service.dart';
 import 'conversation_segment_capture.dart';
@@ -28,6 +30,9 @@ class LiveTranscriptService {
   final PcmSilenceDetector _silenceDetector;
 
   bool _isActive = false;
+  bool _isPaused = false;
+
+  bool get isPaused => _isPaused;
 
   Future<void> start({LiveTranscriptCallback? onUpdate}) async {
     if (_isActive) return;
@@ -35,17 +40,56 @@ class LiveTranscriptService {
     await _whisperKitService.ensureModelReady();
     await _segmentCapture.start();
     _silenceDetector.reset();
+    _isPaused = false;
     try {
       await _audioRecorderService.startStreaming(
-        onChunk: (chunk) {
-          if (!_isActive) return;
-          _segmentCapture.append(chunk);
-          if (_silenceDetector.feed(chunk)) {
-            unawaited(_commitOpenSegment());
-          }
-        },
+        onChunk: (chunk) => _handleChunk(chunk),
       );
       _isActive = true;
+    } catch (_) {
+      _isActive = false;
+      rethrow;
+    }
+  }
+
+  /// Pause recording and transcribe captured segments with WhisperKit.
+  Future<LiveTranscriptResult> pause() async {
+    if (!_isActive || _isPaused) {
+      return _buildCurrentResult();
+    }
+
+    _isActive = false;
+    _isPaused = true;
+
+    try {
+      await _audioRecorderService.stopStreaming();
+    } catch (error, stackTrace) {
+      debugPrint('[LiveTranscript] pause stop streaming failed: $error');
+      debugPrint('$stackTrace');
+    }
+
+    await _commitOpenSegment(force: true);
+    final result = await _transcribePendingSegments();
+
+    debugPrint(
+      '[LiveTranscript] paused (${result.segments.length} segments, '
+      'whisper=${result.usedWhisper}):\n${result.text}',
+    );
+
+    return result;
+  }
+
+  /// Resume recording after [pause].
+  Future<void> resume() async {
+    if (_isActive || !_isPaused) return;
+
+    _silenceDetector.reset();
+    try {
+      await _audioRecorderService.startStreaming(
+        onChunk: (chunk) => _handleChunk(chunk),
+      );
+      _isActive = true;
+      _isPaused = false;
     } catch (_) {
       _isActive = false;
       rethrow;
@@ -55,26 +99,71 @@ class LiveTranscriptService {
   /// Stop streaming, transcribe saved segments with WhisperKit, log only.
   Future<LiveTranscriptResult> finish() async {
     _isActive = false;
+    _isPaused = false;
 
-    try {
-      await _audioRecorderService.stopStreaming();
-    } catch (error, stackTrace) {
-      debugPrint('[LiveTranscript] stop streaming failed: $error');
-      debugPrint('$stackTrace');
+    if (_audioRecorderService.isStreaming) {
+      try {
+        await _audioRecorderService.stopStreaming();
+      } catch (error, stackTrace) {
+        debugPrint('[LiveTranscript] stop streaming failed: $error');
+        debugPrint('$stackTrace');
+      }
     }
 
-    await _commitOpenSegment();
+    await _commitOpenSegment(force: true);
+    final result = await _transcribePendingSegments();
+
+    debugPrint(
+      '[LiveTranscript] finished (${result.segments.length} segments, '
+      'whisper=${result.usedWhisper}):\n${result.text}',
+    );
+
+    return result;
+  }
+
+  void _handleChunk(Uint8List chunk) {
+    if (!_isActive) return;
+
+    final pcm = recorderChunkToPcm16(chunk);
+    if (pcm.isEmpty) return;
+
+    _segmentCapture.append(pcm);
+    if (_silenceDetector.feed(pcm)) {
+      unawaited(_commitOpenSegment());
+    }
+  }
+
+  Future<LiveTranscriptResult> _buildCurrentResult() {
+    return Future.value(
+      LiveTranscriptResult(
+        text: _combinedDisplayText(),
+        segments: List.unmodifiable(_segmentCapture.segments),
+        usedWhisper: _segmentCapture.segments
+            .any((segment) => segment.whisperText.trim().isNotEmpty),
+      ),
+    );
+  }
+
+  String _combinedDisplayText() {
+    return joinSegmentTexts(
+      _segmentCapture.segments.map((segment) => segment.displayText),
+    );
+  }
+
+  Future<LiveTranscriptResult> _transcribePendingSegments() async {
     final segments = _segmentCapture.segments;
+    final pendingSegments = segments
+        .where((segment) => segment.whisperText.trim().isEmpty)
+        .toList(growable: false);
 
-    var finalText = '';
-    var usedWhisper = false;
+    var usedWhisper = segments
+        .any((segment) => segment.whisperText.trim().isNotEmpty);
 
-    if (segments.isNotEmpty) {
+    if (pendingSegments.isNotEmpty) {
       try {
-        final whisperText =
-            await _whisperKitService.buildTranscriptFromSegments(segments);
+        final whisperText = await _whisperKitService
+            .buildTranscriptFromSegments(pendingSegments);
         if (whisperText.trim().isNotEmpty) {
-          finalText = whisperText.trim();
           usedWhisper = true;
         }
       } catch (error, stackTrace) {
@@ -83,20 +172,15 @@ class LiveTranscriptService {
       }
     }
 
-    debugPrint(
-      '[LiveTranscript] finished (${segments.length} segments, '
-      'whisper=$usedWhisper):\n$finalText',
-    );
-
     return LiveTranscriptResult(
-      text: finalText,
+      text: _combinedDisplayText(),
       segments: List.unmodifiable(segments),
       usedWhisper: usedWhisper,
     );
   }
 
-  Future<void> _commitOpenSegment() async {
-    final segment = await _segmentCapture.commitCurrent();
+  Future<void> _commitOpenSegment({bool force = false}) async {
+    final segment = await _segmentCapture.commitCurrent(force: force);
     if (segment != null) {
       debugPrint(
         '[LiveTranscript] saved segment ${segment.id}: ${segment.wavPath}',
@@ -106,6 +190,7 @@ class LiveTranscriptService {
 
   void dispose() {
     _isActive = false;
+    _isPaused = false;
     unawaited(_segmentCapture.dispose());
   }
 }
