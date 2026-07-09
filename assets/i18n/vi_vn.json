@@ -111,5 +111,6 @@
   "settings_help_support": "Trợ giúp & Hỗ trợ",
   "settings_help_support_body": "Để được hỗ trợ về ClearHear, hãy truy cập trang hỗ trợ hoặc liên hệ support@clearhear.app.",
   "settings_version": "Phiên bản",
-  "settings_done": "Xong"
+  "settings_done": "Xong",
+  "session_offline": "ngoại tuyến"
 }

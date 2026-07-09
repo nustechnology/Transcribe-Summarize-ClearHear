@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-import '../../arch/route/app_route.dart';
-import '../../lang/string_keys.dart';
-import '../../style/theme.dart';
-import 'controllers/main_controller.dart';
+import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
+import 'package:transcribe_summarize_clearhear/screen/main/controllers/main_controller.dart';
+import 'package:transcribe_summarize_clearhear/style/theme.dart';
+import 'package:transcribe_summarize_clearhear/arch/route/app_route.dart';
 
 class MainShell extends GetView<MainController> {
   const MainShell({super.key});

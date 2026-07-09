@@ -32,8 +32,6 @@ class DebugSeed {
     'Q3 Budget meeting',
   ];
 
-  /// Populates the database with [sessionCount] sessions.
-  /// Each session will have roughly [segmentsPerSession] segments.
   static Future<void> run({
     int sessionCount = 24,
     int segmentsPerSession = 50,

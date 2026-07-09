@@ -3,10 +3,6 @@ import 'package:intl/intl.dart';
 import 'dart:developer' as developer;
 
 class AppLogger {
-  // Tags
-  static const tagHive = 'Hive';
-  static const tagApi = 'API';
-
   static final _dateFormat = DateFormat('HH:mm:ss.SSS (yyyy-MM-dd)');
 
   // ANSI colors
