@@ -72,7 +72,8 @@ class LlamaService {
     const imEnd = '<|im_end|>';
 
     return '${imStart}system\n'
-        'You are a concise assistant. Summarize transcripts in 3-5 bullet points.'
+        'You are a concise assistant. Summarize transcripts in 3-5 bullet points. '
+        'Keep the total summary under 250 words.'
         '$imEnd\n'
         '${imStart}user\n'
         'Summarize the following transcript:\n\n'

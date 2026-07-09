@@ -31,6 +31,7 @@ class LiveTranscriptService {
 
   bool _isActive = false;
   bool _isPaused = false;
+  Future<void>? _segmentCommitChain;
 
   bool get isPaused => _isPaused;
 
@@ -110,6 +111,7 @@ class LiveTranscriptService {
       }
     }
 
+    await _awaitPendingSegmentCommits();
     await _commitOpenSegment(force: true);
     final result = await _transcribePendingSegments();
 
@@ -151,7 +153,7 @@ class LiveTranscriptService {
   }
 
   Future<LiveTranscriptResult> _transcribePendingSegments() async {
-    final segments = _segmentCapture.segments;
+    final segments = List<ConversationSegment>.from(_segmentCapture.segments);
     final pendingSegments = segments
         .where((segment) => segment.whisperText.trim().isEmpty)
         .toList(growable: false);
@@ -179,18 +181,40 @@ class LiveTranscriptService {
     );
   }
 
-  Future<void> _commitOpenSegment({bool force = false}) async {
-    final segment = await _segmentCapture.commitCurrent(force: force);
-    if (segment != null) {
-      debugPrint(
-        '[LiveTranscript] saved segment ${segment.id}: ${segment.wavPath}',
-      );
+  Future<void> _commitOpenSegment({bool force = false}) {
+    return _enqueueSegmentCommit(() async {
+      final segment = await _segmentCapture.commitCurrent(force: force);
+      if (segment != null) {
+        debugPrint(
+          '[LiveTranscript] saved segment ${segment.id}: ${segment.wavPath}',
+        );
+      }
+    });
+  }
+
+  Future<void> _enqueueSegmentCommit(Future<void> Function() action) {
+    final operation =
+        (_segmentCommitChain ?? Future<void>.value()).then((_) => action());
+    _segmentCommitChain = operation.then(
+      (_) {},
+      onError: (_) {},
+    );
+    return operation;
+  }
+
+  Future<void> _awaitPendingSegmentCommits() async {
+    final pending = _segmentCommitChain;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {}
     }
   }
 
-  void dispose() {
+  Future<void> dispose() async {
     _isActive = false;
     _isPaused = false;
-    unawaited(_segmentCapture.dispose());
+    await _awaitPendingSegmentCommits();
+    await _segmentCapture.dispose();
   }
 }

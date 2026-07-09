@@ -88,6 +88,18 @@ abstract class StringKeys {
   static const datetimeYesterday = 'datetime_yesterday';
   static const somethingWentWrong = 'something_went_wrong';
 
+  static const homeSaveSessionTitle = 'home_save_session_title';
+  static const homeSaveSessionDuration = 'home_save_session_duration';
+  static const homeSaveSessionTitleHint = 'home_save_session_title_hint';
+  static const homeSaveSessionDefaultTitle = 'home_save_session_default_title';
+  static const homeSaveSessionAutoTitle = 'home_save_session_auto_title';
+  static const homeSaveSessionDiscard = 'home_save_session_discard';
+  static const homeSaveSessionSave = 'home_save_session_save';
+  static const homeSaveSessionSuccess = 'home_save_session_success';
+  static const homeSaveSessionDurationMinutes = 'home_save_session_duration_minutes';
+  static const homeSaveSessionDurationSeconds = 'home_save_session_duration_seconds';
+  static const homeSaveSessionDurationOneMinute = 'home_save_session_duration_one_minute';
+  static const homeSaveSessionStoredNote = 'home_save_session_stored_note';
   static const settingsDisplay = 'settings_display';
   static const settingsCaptionSize = 'settings_caption_size';
   static const settingsCaptionSizeHint = 'settings_caption_size_hint';

@@ -39,8 +39,9 @@ class PrimaryActionButton extends GetView<HomeController> {
                   backgroundColor: Colors.white,
                   foregroundColor: AppColors.stopRed,
                   borderColor: AppColors.stopRed,
-                  onPressed:
-                      isProcessing ? null : controller.stopCaptioning,
+                  onPressed: isProcessing || isPausing || controller.isFinishingTranscript.value
+                      ? null
+                      : controller.stopCaptioning,
                 ),
               ),
             ],
@@ -56,8 +57,9 @@ class PrimaryActionButton extends GetView<HomeController> {
                 filled: true,
                 backgroundColor: AppColors.stopRed,
                 foregroundColor: Colors.white,
-                onPressed:
-                    isProcessing || isPausing ? null : controller.stopCaptioning,
+                onPressed: isProcessing || isPausing || controller.isFinishingTranscript.value
+                    ? null
+                    : controller.stopCaptioning,
               ),
             ),
             const SizedBox(width: 12),

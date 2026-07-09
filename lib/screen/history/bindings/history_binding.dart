@@ -8,9 +8,11 @@ import 'package:transcribe_summarize_clearhear/service/database_service.dart';
 class HistoryBinding extends Bindings {
   @override
   void dependencies() {
-    Get.lazyPut<SessionRepository>(
-      () => SessionRepositoryImpl(Get.find<DatabaseService>()),
-    );
+    if (!Get.isRegistered<SessionRepository>()) {
+      Get.lazyPut<SessionRepository>(
+        () => SessionRepositoryImpl(Get.find<DatabaseService>()),
+      );
+    }
     Get.lazyPut<HistoryRepository>(
       () => HistoryRepository(sessionRepository: Get.find()),
     );

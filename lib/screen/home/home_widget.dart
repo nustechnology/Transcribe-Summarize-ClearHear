@@ -1,16 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../style/theme.dart';
-
-import 'components/app_title_bar.dart';
-import 'components/status_bar.dart';
-import 'components/transcript_card.dart';
+import '../../shared/widgets/app_titlebar.dart';
 import 'components/audio_visualizer.dart';
-import 'components/primary_action_button.dart';
 import 'components/option_row.dart';
 import 'components/privacy_note.dart';
+import 'components/primary_action_button.dart';
+import 'components/save_session_sheet.dart';
+import 'components/status_bar.dart';
+import 'components/transcript_card.dart';
 import 'controllers/home_controller.dart';
+import '../../style/theme.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -21,6 +23,70 @@ class HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<HomeView> {
   late final HomeController controller = Get.find<HomeController>();
+  Worker? _savePromptWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    _savePromptWorker = ever<bool>(controller.showSaveSessionPrompt, (show) {
+      if (!show) return;
+      if (!controller.tryBeginSaveSheetPresentation()) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !controller.showSaveSessionPrompt.value) {
+          controller.endSaveSheetPresentation();
+          return;
+        }
+        unawaited(_openSaveSessionSheet());
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _savePromptWorker?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openSaveSessionSheet() async {
+    if (!mounted) {
+      controller.endSaveSheetPresentation();
+      return;
+    }
+
+    var savedSession = false;
+
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        useRootNavigator: true,
+        isDismissible: false,
+        enableDrag: false,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => SaveSessionSheet(
+          controller: controller,
+          initialTitle: controller.defaultSessionTitle,
+          onDiscard: () {
+            controller.discardPendingSession();
+            Navigator.of(sheetContext).pop();
+          },
+          onSave: (title) async {
+            savedSession = await controller.savePendingSession(title);
+            if (savedSession && sheetContext.mounted) {
+              Navigator.of(sheetContext).pop();
+            }
+          },
+        ),
+      );
+
+      if (savedSession) {
+        await controller.navigateToHistoryAfterSave();
+      }
+    } finally {
+      controller.endSaveSheetPresentation();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
