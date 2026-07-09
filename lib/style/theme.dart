@@ -28,6 +28,22 @@ abstract final class AppColors {
   static const body = Color(0xFF545454);
   static const muted = Color(0xFF7A7A7A);
   static const accent = Color(0xFF1C5B5B);
+
+  static const Color gray = Color(0xFF6B7280);
+
+  // Summary Card
+  static const summaryPurple = Color(0xFF635BFF);
+  static const summaryBackgroundStart = Color(0xFFF8F7FF);
+  static const summaryBackgroundEnd = Color(0xFFF3F1FF);
+
+  static const summaryBorder = Color(0xFFE5E7EB);
+
+  // Text
+  static const textDivider = Color(0xFF9CA3AF);
+
+  // Private Badge
+  static const privateBackground = Color(0xFFE8F7F3);
+  static const privateGreen = Color(0xFF0F766E);
 }
 
 class AppTheme {

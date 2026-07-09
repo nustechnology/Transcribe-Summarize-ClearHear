@@ -38,16 +38,21 @@ class HistoryTitleBar extends GetView<HistoryController> {
                     final confirmed = await Get.dialog<bool>(
                       AlertDialog(
                         title: Text(StringKeys.historyDeleteConfirmTitle
-                            .trParams({'count': '${controller.selectedCount}'})),
-                        content: Text(StringKeys.historyDeleteConfirmMessage.tr),
+                            .trParams(
+                                {'count': '${controller.selectedCount}'})),
+                        content:
+                            Text(StringKeys.historyDeleteConfirmMessage.tr),
                         actions: [
                           TextButton(
                             onPressed: () => Get.back(result: false),
                             child: Text(StringKeys.historyCancel.tr),
                           ),
-                          TextButton(
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.stopRed),
                             onPressed: () => Get.back(result: true),
-                            child: Text(StringKeys.historyDeleteConfirmAction.tr),
+                            child:
+                                Text(StringKeys.historyDeleteConfirmAction.tr),
                           ),
                         ],
                       ),
