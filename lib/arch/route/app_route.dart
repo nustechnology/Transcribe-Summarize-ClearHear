@@ -5,6 +5,7 @@ import 'package:transcribe_summarize_clearhear/screen/home/bindings/home_binding
 import 'package:transcribe_summarize_clearhear/screen/home/home_widget.dart';
 import 'package:transcribe_summarize_clearhear/screen/main/bindings/main_binding.dart';
 import 'package:transcribe_summarize_clearhear/screen/main/main_shell.dart';
+import 'package:transcribe_summarize_clearhear/screen/settings/bindings/settings_binding.dart';
 import 'package:transcribe_summarize_clearhear/screen/settings/settings_widget.dart';
 
 abstract class AppRoutes {
@@ -37,6 +38,7 @@ class AppPages {
         GetPage(
           name: AppRoutes.settings,
           page: () => const SettingsView(),
+          binding: SettingsBinding(),
         ),
       ],
     ),

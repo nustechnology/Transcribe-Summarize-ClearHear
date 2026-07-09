@@ -28,6 +28,9 @@ def main() -> int:
     third_party_llama = project_root / "third_party" / "llama.cpp"
     marker = "PATCHED_CLEARHEAR_ANDROID_LLAMA_H"
     cmake_marker = "PATCHED_CLEARHEAR_DISABLE_VULKAN"
+    # flutter_llama pins CMake 3.18.1; synced llama.cpp needs 3.19+.
+    cmake_version_old = "version = '3.18.1'"
+    cmake_version_new = "version = '3.22.1'"
     cmake_gpu_block = """# GPU Acceleration for Android devices
 # Vulkan for modern devices (Android 7.0+)
 # OpenCL as fallback for older devices
@@ -92,6 +95,24 @@ message(STATUS "   Vulkan/OpenCL disabled for Android NDK compatibility")"""
             plugin_llama.unlink()
         ensure_llama_tree(third_party_llama, plugin_llama)
         plugin_roots.append(plugin_llama)
+
+        android_build_gradle = plugin_dir / "android" / "build.gradle"
+        if android_build_gradle.is_file():
+            gradle_text = android_build_gradle.read_text(encoding="utf-8")
+            if cmake_version_old in gradle_text:
+                android_build_gradle.write_text(
+                    gradle_text.replace(cmake_version_old, cmake_version_new, 1),
+                    encoding="utf-8",
+                )
+                print(
+                    f"Patched: {android_build_gradle} "
+                    f"(cmake {cmake_version_old} -> {cmake_version_new})"
+                )
+            elif cmake_version_new not in gradle_text:
+                print(
+                    f"WARNING: cmake version pin not found in {android_build_gradle}; "
+                    f"CMake {cmake_version_new} override was NOT applied."
+                )
 
         cmake_lists = plugin_dir / "android" / "src" / "main" / "cpp" / "CMakeLists.txt"
         if cmake_lists.is_file():
