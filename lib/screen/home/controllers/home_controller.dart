@@ -294,7 +294,7 @@ class HomeController extends GetxController {
     final liveTranscript = _activeLiveTranscript;
     if (liveTranscript == null) return;
 
-    isPausing.value = false;
+    isPausing.value = true;
     try {
       await liveTranscript.resume();
       isPaused.value = false;
