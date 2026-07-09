@@ -63,5 +63,25 @@ abstract class StringKeys {
   static const datetimeYesterday = 'datetime_yesterday';
   static const somethingWentWrong = 'something_went_wrong';
 
+  static const settingsDisplay = 'settings_display';
+  static const settingsCaptionSize = 'settings_caption_size';
+  static const settingsCaptionSizeHint = 'settings_caption_size_hint';
+  static const settingsCaptionSizeValue = 'settings_caption_size_value';
+  static const settingsPrivacy = 'settings_privacy';
+  static const settingsSaveTranscripts = 'settings_save_transcripts';
+  static const settingsSaveTranscriptsHint = 'settings_save_transcripts_hint';
+  static const settingsClearAllData = 'settings_clear_all_data';
+  static const settingsClearAllDataHint = 'settings_clear_all_data_hint';
+  static const settingsErase = 'settings_erase';
+  static const settingsClearDataConfirmTitle = 'settings_clear_data_confirm_title';
+  static const settingsClearDataConfirmMessage = 'settings_clear_data_confirm_message';
+  static const settingsClearDataSuccess = 'settings_clear_data_success';
+  static const settingsAbout = 'settings_about';
+  static const settingsAboutDescription = 'settings_about_description';
+  static const settingsHelpSupport = 'settings_help_support';
+  static const settingsHelpSupportBody = 'settings_help_support_body';
+  static const settingsVersion = 'settings_version';
+  static const settingsDone = 'settings_done';
+
   static String t(String key) => key.tr;
 }

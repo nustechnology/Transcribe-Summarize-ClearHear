@@ -1,4 +1,3 @@
-import com.android.build.gradle.LibraryExtension
 import java.util.Locale
 
 allprojects {
@@ -76,16 +75,6 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// flutter_llama pins CMake 3.18.1, but synced llama.cpp (Vulkan backend) needs 3.19+.
-subprojects {
-    afterEvaluate {
-        if (name != "flutter_llama") {
-            return@afterEvaluate
-        }
-        extensions.findByType(LibraryExtension::class.java)?.externalNativeBuild?.cmake?.version =
-            "3.22.1"
-    }
-}
 subprojects {
     plugins.withId("com.android.library") {
         extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)?.apply {
