@@ -51,7 +51,8 @@ class DateTimeUtils {
     return '$displayHour:$minute $period';
   }
 
-  static String formatDurationFromSeconds(int seconds) {
+  static String formatDurationFromSeconds(int? seconds) {
+    if (seconds == null) return "-";
     final duration = Duration(seconds: seconds);
 
     String twoDigits(int n) => n.toString().padLeft(2, '0');

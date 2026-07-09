@@ -42,8 +42,9 @@ dependencies:
   whisper_kit: ^0.3.0
   audio_waveforms: ^2.0.2
   intl: ^0.20.2
-  fluttertoast: ^9.0.0
   sqflite: ^2.3.3
+  share_plus: ^13.2.0
+  fluttertoast: ^9.1.0
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/screen/history/controllers/history_controller.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/history_item.dart';
 import 'package:transcribe_summarize_clearhear/shared/widgets/highlighted_text.dart';
+import 'package:transcribe_summarize_clearhear/shared/widgets/inline_editable_title.dart';
 import 'package:transcribe_summarize_clearhear/style/theme.dart';
 import 'package:transcribe_summarize_clearhear/util/datetime/datetime_utils.dart';
 
@@ -215,139 +216,6 @@ class HistoryMetadataChip extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-      ],
-    );
-  }
-}
-
-class InlineEditableTitle extends StatefulWidget {
-  const InlineEditableTitle({
-    super.key,
-    required this.initialTitle,
-    required this.isSelectionMode,
-    this.searchKeyword = '',
-    required this.onSave,
-    required this.onTapSelectionMode,
-  });
-
-  final String initialTitle;
-  final bool isSelectionMode;
-  final String searchKeyword;
-  final ValueChanged<String> onSave;
-  final VoidCallback onTapSelectionMode;
-
-  @override
-  State<InlineEditableTitle> createState() => _InlineEditableTitleState();
-}
-
-class _InlineEditableTitleState extends State<InlineEditableTitle> {
-  late TextEditingController _textController;
-  late FocusNode _focusNode;
-  bool _isEditing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _textController = TextEditingController(text: widget.initialTitle);
-    _focusNode = FocusNode();
-    _focusNode.addListener(_onFocusChange);
-  }
-
-  @override
-  void didUpdateWidget(covariant InlineEditableTitle oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialTitle != widget.initialTitle && !_isEditing) {
-      _textController.text = widget.initialTitle;
-    }
-  }
-
-  void _onFocusChange() {
-    if (!_focusNode.hasFocus && _isEditing) {
-      _saveAndExit();
-    }
-  }
-
-  void _saveAndExit() {
-    if (!_isEditing) return;
-
-    final newTitle = _textController.text.trim();
-    if (newTitle.isNotEmpty && newTitle != widget.initialTitle) {
-      widget.onSave(newTitle);
-    }
-
-    setState(() {
-      _isEditing = false;
-      _textController.text = newTitle.isEmpty ? widget.initialTitle : newTitle;
-    });
-  }
-
-  @override
-  void dispose() {
-    _focusNode.removeListener(_onFocusChange);
-    _focusNode.dispose();
-    _textController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isEditing) {
-      return TextField(
-        controller: _textController,
-        focusNode: _focusNode,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          color: AppColors.title,
-        ),
-        decoration: const InputDecoration(
-          isDense: true,
-          contentPadding: EdgeInsets.zero,
-          border: InputBorder.none,
-        ),
-        textInputAction: TextInputAction.done,
-        onSubmitted: (_) => _saveAndExit(),
-      );
-    }
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              if (widget.isSelectionMode) {
-                widget.onTapSelectionMode();
-                return;
-              }
-              setState(() {
-                _isEditing = true;
-                _textController.text = widget.initialTitle;
-              });
-              _focusNode.requestFocus();
-            },
-            child: HighlightedText(
-              text: widget.initialTitle,
-              keyword: widget.searchKeyword,
-              enabled: widget.searchKeyword.isNotEmpty,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              softWrap: false,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.title,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(
-          width: 2.0,
-        ),
-        const Icon(
-          Icons.arrow_forward_ios,
-          size: 16.0,
-        )
       ],
     );
   }
