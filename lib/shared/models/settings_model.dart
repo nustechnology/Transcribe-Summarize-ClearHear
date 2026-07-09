@@ -1,7 +1,9 @@
+import 'package:transcribe_summarize_clearhear/shared/caption_size_config.dart';
+
 /// Domain model for the settings singleton row (always id = 1).
 class SettingsModel {
   const SettingsModel({
-    this.fontSize = 20.0,
+    this.fontSize = CaptionSizeConfig.defaultSize,
     this.theme = 'system',
     this.savingEnabled = true,
     this.keepScreenOn = false,
@@ -53,7 +55,10 @@ class SettingsModel {
 
   factory SettingsModel.fromMap(Map<String, dynamic> map) {
     return SettingsModel(
-      fontSize: (map['font_size'] as num?)?.toDouble() ?? 20.0,
+      fontSize: ((map['font_size'] as num?)?.toDouble() ??
+              CaptionSizeConfig.defaultSize)
+          .clamp(CaptionSizeConfig.min, CaptionSizeConfig.max)
+          .toDouble(),
       theme: map['theme'] as String? ?? 'system',
       savingEnabled: (map['saving_enabled'] as int? ?? 1) == 1,
       keepScreenOn: (map['keep_screen_on'] as int? ?? 0) == 1,
