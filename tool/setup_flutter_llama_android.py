@@ -111,7 +111,7 @@ message(STATUS "   Vulkan/OpenCL disabled for Android NDK compatibility")"""
             elif cmake_version_new not in gradle_text:
                 print(
                     f"WARNING: cmake version pin not found in {android_build_gradle}; "
-                    "CMake 3.22.1 override was NOT applied."
+                    f"CMake {cmake_version_new} override was NOT applied."
                 )
 
         cmake_lists = plugin_dir / "android" / "src" / "main" / "cpp" / "CMakeLists.txt"
