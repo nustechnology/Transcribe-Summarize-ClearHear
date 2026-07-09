@@ -11,7 +11,7 @@ class _FakeWhisperKitService extends WhisperKitService {
   Future<void> ensureModelReady() async {}
 
   @override
-  void dispose() {}
+  Future<void> dispose() async {}
 }
 
 void main() {
