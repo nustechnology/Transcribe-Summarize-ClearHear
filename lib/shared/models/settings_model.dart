@@ -57,7 +57,8 @@ class SettingsModel {
     return SettingsModel(
       fontSize: ((map['font_size'] as num?)?.toDouble() ??
               CaptionSizeConfig.defaultSize)
-          .clamp(CaptionSizeConfig.min, CaptionSizeConfig.max),
+          .clamp(CaptionSizeConfig.min, CaptionSizeConfig.max)
+          .toDouble(),
       theme: map['theme'] as String? ?? 'system',
       savingEnabled: (map['saving_enabled'] as int? ?? 1) == 1,
       keepScreenOn: (map['keep_screen_on'] as int? ?? 0) == 1,

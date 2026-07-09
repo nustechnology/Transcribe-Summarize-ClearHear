@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:transcribe_summarize_clearhear/arch/repository/session_repository.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/settings_repository.dart';
 import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
 import 'package:transcribe_summarize_clearhear/screen/history/controllers/history_controller.dart';
 import 'package:transcribe_summarize_clearhear/screen/home/controllers/home_controller.dart';
+import 'package:transcribe_summarize_clearhear/service/database_service.dart';
 import 'package:transcribe_summarize_clearhear/shared/app_version.dart';
 import 'package:transcribe_summarize_clearhear/shared/caption_size_config.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/settings_model.dart';
@@ -14,16 +14,16 @@ import 'package:transcribe_summarize_clearhear/util/toast/app_toast.dart';
 class SettingsController extends GetxController {
   SettingsController({
     required SettingsRepository settingsRepository,
-    required SessionRepository sessionRepository,
+    required DatabaseService databaseService,
   })  : _settingsRepository = settingsRepository,
-        _sessionRepository = sessionRepository;
+        _databaseService = databaseService;
 
   static const minCaptionSize = CaptionSizeConfig.min;
   static const maxCaptionSize = CaptionSizeConfig.max;
   static const captionSizeStep = CaptionSizeConfig.step;
 
   final SettingsRepository _settingsRepository;
-  final SessionRepository _sessionRepository;
+  final DatabaseService _databaseService;
 
   final captionSize = SettingsModel.defaults().fontSize.obs;
   final saveTranscripts = true.obs;
@@ -121,12 +121,15 @@ class SettingsController extends GetxController {
 
     try {
       isClearing.value = true;
-      await _sessionRepository.deleteAllSessions();
-      final defaults = SettingsModel.defaults();
-      await _settingsRepository.saveSettings(defaults);
-      captionSize.value = defaults.fontSize;
-      saveTranscripts.value = defaults.savingEnabled;
-      _syncCaptionSizeToHome(defaults.fontSize);
+      // Atomic: sessions delete + settings reset commit together or not at all,
+      // so a mid-operation failure never leaves stale settings behind.
+      await _databaseService.clearAllUserData();
+
+      // Reflect the persisted truth in the UI (only reached on success).
+      final settings = await _settingsRepository.loadSettings();
+      captionSize.value = settings.fontSize;
+      saveTranscripts.value = settings.savingEnabled;
+      _syncCaptionSizeToHome(settings.fontSize);
 
       if (Get.isRegistered<HistoryController>()) {
         await Get.find<HistoryController>().loadHistory();
