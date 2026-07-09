@@ -60,8 +60,8 @@ class _HomeViewState extends State<HomeView> {
       await showModalBottomSheet<void>(
         context: context,
         useRootNavigator: true,
-        isDismissible: true,
-        enableDrag: true,
+        isDismissible: false,
+        enableDrag: false,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (sheetContext) => SaveSessionSheet(
@@ -82,8 +82,6 @@ class _HomeViewState extends State<HomeView> {
 
       if (savedSession) {
         await controller.navigateToHistoryAfterSave();
-      } else if (controller.showSaveSessionPrompt.value) {
-        controller.discardPendingSession();
       }
     } finally {
       controller.endSaveSheetPresentation();

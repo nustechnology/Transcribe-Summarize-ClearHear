@@ -43,6 +43,7 @@ class SettingsController extends GetxController {
       captionSize.value = settings.fontSize;
       saveTranscripts.value = settings.savingEnabled;
       _syncCaptionSizeToHome(settings.fontSize);
+      _syncSaveTranscriptsToHome(settings.savingEnabled);
     } catch (e) {
       AppLogger.error(error: e);
       AppToast.error(StringKeys.somethingWentWrong.tr);
@@ -80,10 +81,12 @@ class SettingsController extends GetxController {
   Future<void> setSaveTranscripts(bool enabled) async {
     final previous = saveTranscripts.value;
     saveTranscripts.value = enabled;
+    _syncSaveTranscriptsToHome(enabled);
     try {
       await _settingsRepository.updateSavingEnabled(enabled: enabled);
     } catch (e) {
       saveTranscripts.value = previous;
+      _syncSaveTranscriptsToHome(previous);
       AppLogger.error(error: e);
       AppToast.error(StringKeys.somethingWentWrong.tr);
     }
@@ -129,6 +132,7 @@ class SettingsController extends GetxController {
       captionSize.value = defaults.fontSize;
       saveTranscripts.value = defaults.savingEnabled;
       _syncCaptionSizeToHome(defaults.fontSize);
+      _syncSaveTranscriptsToHome(defaults.savingEnabled);
 
       if (Get.isRegistered<HistoryController>()) {
         await Get.find<HistoryController>().loadHistory();
@@ -176,6 +180,12 @@ class SettingsController extends GetxController {
   void _syncCaptionSizeToHome(double size) {
     if (Get.isRegistered<HomeController>()) {
       Get.find<HomeController>().updateDefaultCaptionFontSize(size);
+    }
+  }
+
+  void _syncSaveTranscriptsToHome(bool enabled) {
+    if (Get.isRegistered<HomeController>()) {
+      Get.find<HomeController>().updateSaveTranscriptsEnabled(enabled);
     }
   }
 }

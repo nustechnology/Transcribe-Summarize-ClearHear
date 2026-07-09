@@ -18,6 +18,7 @@ import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
 import '../../../service/whisper_kit_service.dart';
 import '../../../shared/caption_size_config.dart';
+import '../../../shared/models/settings_model.dart';
 import '../../../util/session_segment_mapper.dart';
 import '../../../util/toast/app_toast.dart';
 
@@ -53,6 +54,7 @@ class HomeController extends GetxController {
   Timer? _durationTimer;
   List<ConversationSegment> _pendingSaveSegments = const [];
   bool _isSaveSheetVisible = false;
+  bool _saveTranscriptsEnabled = SettingsModel.defaults().savingEnabled;
 
   final isCaptioning = false.obs;
   final transcript = ''.obs;
@@ -129,18 +131,19 @@ class HomeController extends GetxController {
   void onInit() {
     super.onInit();
     unawaited(_preloadAsrModel());
-    unawaited(_loadDefaultCaptionFontSize());
+    unawaited(_loadPersistedSettings());
   }
 
-  Future<void> _loadDefaultCaptionFontSize() async {
+  Future<void> _loadPersistedSettings() async {
     final repository = _settingsRepository;
     if (repository == null) return;
 
     try {
       final settings = await repository.loadSettings();
       updateDefaultCaptionFontSize(settings.fontSize);
+      updateSaveTranscriptsEnabled(settings.savingEnabled);
     } catch (error, stackTrace) {
-      debugPrint('[Transcribe] Failed to load caption font size: $error');
+      debugPrint('[Transcribe] Failed to load settings: $error');
       debugPrint('$stackTrace');
     }
   }
@@ -150,6 +153,13 @@ class HomeController extends GetxController {
     defaultCaptionFontSize.value = size;
     if (!isCaptioning.value) {
       transcriptFontSize.value = size;
+    }
+  }
+
+  void updateSaveTranscriptsEnabled(bool enabled) {
+    _saveTranscriptsEnabled = enabled;
+    if (!enabled && showSaveSessionPrompt.value) {
+      _clearPendingSaveState();
     }
   }
 
@@ -306,8 +316,10 @@ class HomeController extends GetxController {
       if (!hasVisibleTranscript) {
         statusMessage.value = StringKeys.transcriptionFailed;
         _clearPendingSaveState();
-      } else {
+      } else if (await _isTranscriptSavingEnabled()) {
         showSaveSessionPrompt.value = true;
+      } else {
+        _clearPendingSaveState();
       }
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Stop failed: $error');
@@ -331,6 +343,7 @@ class HomeController extends GetxController {
 
   Future<bool> savePendingSession(String title) async {
     if (isSavingSession.value) return false;
+    if (!await _isTranscriptSavingEnabled()) return false;
 
     final sessionRepo = _sessionRepository;
     final segmentRepo = _segmentRepository;
@@ -384,7 +397,10 @@ class HomeController extends GetxController {
       _captioningStartedAt = null;
       captioningElapsed.value = Duration.zero;
 
-      AppToast.success(StringKeys.homeSaveSessionSuccess.tr);
+      AppToast.sessionSaved(
+        title: StringKeys.homeSaveSessionSuccess.tr,
+        subtitle: StringKeys.homeSaveSessionStoredNote.tr,
+      );
 
       return true;
     } catch (error, stackTrace) {
@@ -439,6 +455,21 @@ class HomeController extends GetxController {
   void _clearPendingSaveState() {
     _pendingSaveSegments = const [];
     showSaveSessionPrompt.value = false;
+  }
+
+  Future<bool> _isTranscriptSavingEnabled() async {
+    final repository = _settingsRepository;
+    if (repository == null) return _saveTranscriptsEnabled;
+
+    try {
+      final settings = await repository.loadSettings();
+      _saveTranscriptsEnabled = settings.savingEnabled;
+      return settings.savingEnabled;
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Failed to read save-transcripts setting: $error');
+      debugPrint('$stackTrace');
+      return _saveTranscriptsEnabled;
+    }
   }
 
   Future<void> pauseCaptioning() async {
