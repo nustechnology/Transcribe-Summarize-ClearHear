@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:whisper_kit/download_model.dart';
 import 'package:whisper_kit/whisper_kit.dart';
 
 import '../config/ml_model_config.dart';
@@ -25,54 +28,141 @@ class WhisperKitService {
   void Function(int received, int total)? onDownloadProgress;
 
   Whisper? _whisper;
+  WhisperModel? _whisperModel;
+  String? _modelFilePath;
   bool _modelReady = false;
+  bool _disposed = false;
   Future<void>? _loading;
+  Future<void>? _nativeQueue;
+
+  static const _minModelBytes = 1024 * 1024;
 
   Future<void> ensureModelReady() {
+    if (_disposed) {
+      throw StateError('WhisperKitService has been disposed');
+    }
     return _loading ??= _loadModel();
   }
 
-  Future<void> _loadModel() async {
-    if (_modelReady) return;
+  Future<void> _loadModel() {
+    return _enqueueNative(() async {
+      if (_modelReady) return;
 
-    try {
-      _whisperDownloadProgressSink = onDownloadProgress;
-      _whisper = Whisper(
-        model: _resolveWhisperModel(MlModelConfig.whisperModelName),
+      try {
+        _whisperDownloadProgressSink = onDownloadProgress;
+        _whisperModel = _resolveWhisperModel(MlModelConfig.whisperModelName);
+        _whisper = Whisper(
+          model: _whisperModel!,
+          onDownloadProgress: _relayWhisperDownloadProgress,
+        );
+
+        await _whisper!.getVersion();
+        _modelFilePath = await _ensureModelFileOnDisk(_whisperModel!);
+        _modelReady = true;
+        debugPrint(
+          '[WhisperKit] model ready (${MlModelConfig.whisperModelName}) '
+          'at $_modelFilePath',
+        );
+      } catch (error, stackTrace) {
+        _whisper = null;
+        _whisperModel = null;
+        _modelFilePath = null;
+        _modelReady = false;
+        debugPrint('[WhisperKit] model load failed: $error');
+        debugPrint('$stackTrace');
+        rethrow;
+      } finally {
+        _whisperDownloadProgressSink = null;
+        _loading = null;
+      }
+    });
+  }
+
+  Future<String> _ensureModelFileOnDisk(WhisperModel model) async {
+    final modelDir = await _modelDirectory();
+    final modelFile = File(model.getPath(modelDir.path));
+
+    if (!modelFile.existsSync() || modelFile.lengthSync() < _minModelBytes) {
+      await downloadModel(
+        model: model,
+        destinationPath: modelDir.path,
         onDownloadProgress: _relayWhisperDownloadProgress,
       );
-
-      await _whisper!.getVersion();
-      _modelReady = true;
-      debugPrint('[WhisperKit] model ready (${MlModelConfig.whisperModelName})');
-    } catch (error, stackTrace) {
-      _whisper = null;
-      _modelReady = false;
-      debugPrint('[WhisperKit] model load failed: $error');
-      debugPrint('$stackTrace');
-      rethrow;
-    } finally {
-      _whisperDownloadProgressSink = null;
-      _loading = null;
     }
+
+    if (!modelFile.existsSync()) {
+      throw StateError('Whisper model file is missing after download');
+    }
+
+    final size = await modelFile.length();
+    if (size < _minModelBytes) {
+      throw StateError(
+        'Whisper model file is too small ($size bytes): ${modelFile.path}',
+      );
+    }
+
+    return modelFile.path;
+  }
+
+  Future<Directory> _modelDirectory() async {
+    if (Platform.isAndroid) {
+      return getApplicationSupportDirectory();
+    }
+    return getLibraryDirectory();
   }
 
   Future<String> transcribeWav(String wavPath) async {
+    await _ensureReadyForTranscribe();
+    return _enqueueNative(() => _transcribeWavImpl(wavPath));
+  }
+
+  /// Loads the model and verifies the on-disk file before entering the native queue.
+  ///
+  /// Must not be called from inside [_enqueueNative]; [ensureModelReady] also
+  /// queues work and would deadlock with an in-flight transcription task.
+  Future<void> _ensureReadyForTranscribe() async {
     await ensureModelReady();
 
-    final whisper = _whisper;
-    if (whisper == null) {
+    final modelPath = _modelFilePath;
+    if (modelPath == null) {
       throw StateError('WhisperKit model is not ready');
+    }
+
+    final modelFile = File(modelPath);
+    if (!await modelFile.exists() || await modelFile.length() < _minModelBytes) {
+      debugPrint('[WhisperKit] model file missing before transcribe, reloading');
+      _modelReady = false;
+      _loading = null;
+      await ensureModelReady();
+    }
+
+    if (_whisper == null || _modelFilePath == null) {
+      throw StateError('WhisperKit model is not ready');
+    }
+  }
+
+  Future<String> _transcribeWavImpl(String wavPath) async {
+    if (_disposed) {
+      throw StateError('WhisperKitService has been disposed');
     }
 
     final wavFile = File(wavPath);
     if (!await wavFile.exists()) {
-      throw StateError('WAV file not found: $wavPath');
+      debugPrint('[WhisperKit] WAV file missing, skipping: $wavPath');
+      return '';
     }
 
     final wavBytes = await wavFile.length();
+    final pcmBytes = wavBytes > wavHeaderSize ? wavBytes - wavHeaderSize : 0;
+    if (pcmBytes < MlModelConfig.minSegmentPcmBytes) {
+      debugPrint(
+        '[WhisperKit] skipping short audio ($pcmBytes pcm bytes): $wavPath',
+      );
+      return '';
+    }
+
     final durationSec = durationSecondsForPcm16(
-      wavBytes > wavHeaderSize ? wavBytes - wavHeaderSize : 0,
+      pcmBytes,
       sampleRate: MlModelConfig.audioSampleRate,
     );
     debugPrint(
@@ -80,21 +170,34 @@ class WhisperKitService {
       '(${durationSec.toStringAsFixed(2)}s, $wavBytes bytes)',
     );
 
-    final result = await whisper.transcribe(
-      transcribeRequest: TranscribeRequest(
-        audio: wavPath,
-        language: MlModelConfig.whisperLanguage,
-        isNoTimestamps: true,
-        isVerbose: kDebugMode,
-        threads: MlModelConfig.whisperThreads,
-      ),
-    );
-
-    final text = _extractTranscriptText(result);
-    if (text.isEmpty) {
-      debugPrint('[WhisperKit] empty transcript for $wavPath');
+    final whisper = _whisper;
+    final modelPath = _modelFilePath;
+    if (whisper == null || modelPath == null) {
+      throw StateError('WhisperKit model is not ready');
     }
-    return formatAsrText(text);
+
+    try {
+      final result = await whisper.transcribe(
+        transcribeRequest: TranscribeRequest(
+          audio: wavPath,
+          language: MlModelConfig.whisperLanguage,
+          isNoTimestamps: true,
+          isVerbose: kDebugMode,
+          threads: MlModelConfig.whisperThreadsForPlatform,
+          nProcessors: 1,
+        ),
+      );
+
+      final text = _extractTranscriptText(result);
+      if (text.isEmpty) {
+        debugPrint('[WhisperKit] empty transcript for $wavPath');
+      }
+      return formatAsrText(text);
+    } on TranscriptionException catch (error, stackTrace) {
+      debugPrint('[WhisperKit] transcribe failed for $wavPath: $error');
+      debugPrint('$stackTrace');
+      return '';
+    }
   }
 
   /// Transcribes each saved segment and returns the combined transcript.
@@ -124,11 +227,35 @@ class WhisperKitService {
     return joinSegmentTexts(lines);
   }
 
-  void dispose() {
+  Future<T> _enqueueNative<T>(Future<T> Function() action) {
+    final operation = (_nativeQueue ?? Future<void>.value()).then((_) {
+      return action();
+    });
+    _nativeQueue = operation.then(
+      (_) {},
+      onError: (_) {},
+    );
+    return operation;
+  }
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+
+    final pending = _nativeQueue;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {}
+    }
+
     _whisperDownloadProgressSink = null;
     _whisper = null;
+    _whisperModel = null;
+    _modelFilePath = null;
     _modelReady = false;
     _loading = null;
+    _nativeQueue = null;
   }
 }
 

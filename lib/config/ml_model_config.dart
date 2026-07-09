@@ -1,3 +1,5 @@
+import 'dart:io';
+
 /// On-device ML stack for ClearHear.
 abstract final class MlModelConfig {
   static const audioSampleRate = 16000;
@@ -15,6 +17,10 @@ abstract final class MlModelConfig {
   static const whisperModelName = 'tiny';
   static const whisperLanguage = 'en';
   static const whisperThreads = 2;
+
+  /// Use a single worker thread on Android to avoid whisper.cpp crashes on emulators.
+  static int get whisperThreadsForPlatform =>
+      Platform.isAndroid ? 1 : whisperThreads;
 
   /// Summarization: Qwen2.5-0.5B via flutter_llama.
   static const summaryModelId = 'Qwen/Qwen2.5-0.5B-Instruct-GGUF';

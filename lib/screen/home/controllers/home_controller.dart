@@ -5,15 +5,21 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../arch/repository/segment_repository.dart';
+import '../../../arch/repository/session_repository.dart';
 import '../../../model/conversation_segment.dart';
 import '../../../model/transcript_segment_entry.dart';
-import '../../../lang/string_keys.dart';
 import '../../../arch/repository/settings_repository.dart';
+import '../../../lang/string_keys.dart';
+import '../../../screen/history/controllers/history_controller.dart';
+import '../../../screen/main/controllers/main_controller.dart';
 import '../../../service/audio_recorder_service.dart';
 import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
 import '../../../service/whisper_kit_service.dart';
 import '../../../shared/caption_size_config.dart';
+import '../../../util/session_segment_mapper.dart';
+import '../../../util/toast/app_toast.dart';
 
 class HomeController extends GetxController {
   HomeController({
@@ -22,23 +28,31 @@ class HomeController extends GetxController {
     LlamaService? llamaService,
     AudioRecorderService? audioRecorderService,
     LiveTranscriptService? liveTranscriptService,
+    SessionRepository? sessionRepository,
+    SegmentRepository? segmentRepository,
   })  : _settingsRepository = settingsRepository,
         _whisperKitService = whisperKitService ?? WhisperKitService(),
         _llamaService = llamaService ?? LlamaService(),
         _audioRecorderService =
             audioRecorderService ?? AudioRecorderService(),
-        _liveTranscriptService = liveTranscriptService;
+        _liveTranscriptService = liveTranscriptService,
+        _sessionRepository = sessionRepository,
+        _segmentRepository = segmentRepository;
 
   final SettingsRepository? _settingsRepository;
   final WhisperKitService _whisperKitService;
   final LlamaService _llamaService;
   final AudioRecorderService _audioRecorderService;
   final LiveTranscriptService? _liveTranscriptService;
+  final SessionRepository? _sessionRepository;
+  final SegmentRepository? _segmentRepository;
 
   LiveTranscriptService? _activeLiveTranscript;
   Future<void>? _finishFuture;
   DateTime? _captioningStartedAt;
   Timer? _durationTimer;
+  List<ConversationSegment> _pendingSaveSegments = const [];
+  bool _isSaveSheetVisible = false;
 
   final isCaptioning = false.obs;
   final transcript = ''.obs;
@@ -55,6 +69,8 @@ class HomeController extends GetxController {
   final isAsrModelReady = false.obs;
   final isAsrModelLoading = true.obs;
   final asrModelDownloadProgress = 0.0.obs;
+  final showSaveSessionPrompt = false.obs;
+  final isSavingSession = false.obs;
 
   RecorderController get recorderController =>
       _audioRecorderService.recorderController;
@@ -66,6 +82,48 @@ class HomeController extends GetxController {
           whisperKitService: _whisperKitService,
         );
   }
+
+  String get formattedSessionDurationLabel {
+    final totalSeconds = captioningElapsed.value.inSeconds;
+    if (totalSeconds >= 60) {
+      final minutes = totalSeconds ~/ 60;
+      final durationText = minutes == 1
+          ? StringKeys.homeSaveSessionDurationOneMinute.tr
+          : StringKeys.homeSaveSessionDurationMinutes.trParams({
+              'count': '$minutes',
+            });
+      return StringKeys.homeSaveSessionDuration.trParams({
+        'duration': durationText,
+      });
+    }
+
+    final seconds = totalSeconds < 1 ? 1 : totalSeconds;
+    final durationText = StringKeys.homeSaveSessionDurationSeconds.trParams({
+      'count': '$seconds',
+    });
+    return StringKeys.homeSaveSessionDuration.trParams({
+      'duration': durationText,
+    });
+  }
+
+  String get defaultSessionTitle => _sessionTitleForDate(
+        _captioningStartedAt ?? DateTime.now(),
+        prefixKey: StringKeys.homeSaveSessionDefaultTitle,
+      );
+
+  bool tryBeginSaveSheetPresentation() {
+    if (_isSaveSheetVisible || !showSaveSessionPrompt.value) {
+      return false;
+    }
+    _isSaveSheetVisible = true;
+    return true;
+  }
+
+  void endSaveSheetPresentation() {
+    _isSaveSheetVisible = false;
+  }
+
+  Future<void> navigateToHistoryAfterSave() => _navigateToHistory();
 
   @override
   void onInit() {
@@ -146,10 +204,7 @@ class HomeController extends GetxController {
         return;
       }
 
-      statusMessage.value = '';
-      summary.value = '';
-      transcript.value = '';
-      transcriptSegments.clear();
+      _resetLiveSessionState();
       isFinishingTranscript.value = false;
       isPaused.value = false;
       isPausing.value = false;
@@ -169,15 +224,21 @@ class HomeController extends GetxController {
       debugPrint('[Transcribe] Recorder unavailable (MissingPluginException)');
       isCaptioning.value = false;
       statusMessage.value = StringKeys.recorderUnavailable;
-      _activeLiveTranscript?.dispose();
+      final failedTranscript = _activeLiveTranscript;
       _activeLiveTranscript = null;
+      if (failedTranscript != null) {
+        unawaited(failedTranscript.dispose());
+      }
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Start failed: $error');
       debugPrint('$stackTrace');
       isCaptioning.value = false;
       statusMessage.value = StringKeys.transcriptionFailed;
-      _activeLiveTranscript?.dispose();
+      final failedTranscript = _activeLiveTranscript;
       _activeLiveTranscript = null;
+      if (failedTranscript != null) {
+        unawaited(failedTranscript.dispose());
+      }
     }
   }
 
@@ -221,6 +282,7 @@ class HomeController extends GetxController {
     transcriptSegments.assignAll(
       transcriptEntriesFromSegments(result.segments),
     );
+    _pendingSaveSegments = List.unmodifiable(result.segments);
   }
 
   Future<void> _finishInBackground(LiveTranscriptService liveTranscript) async {
@@ -243,15 +305,140 @@ class HomeController extends GetxController {
           transcriptSegments.isNotEmpty || result.text.trim().isNotEmpty;
       if (!hasVisibleTranscript) {
         statusMessage.value = StringKeys.transcriptionFailed;
+        _clearPendingSaveState();
+      } else {
+        showSaveSessionPrompt.value = true;
       }
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Stop failed: $error');
       debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionFailed;
+      _clearPendingSaveState();
     } finally {
       isFinishingTranscript.value = false;
-      liveTranscript.dispose();
+      await liveTranscript.dispose();
     }
+  }
+
+  void discardPendingSession() {
+    if (isSavingSession.value) return;
+    showSaveSessionPrompt.value = false;
+    _resetLiveSessionState();
+    _clearPendingSaveState();
+    _captioningStartedAt = null;
+    captioningElapsed.value = Duration.zero;
+  }
+
+  Future<bool> savePendingSession(String title) async {
+    if (isSavingSession.value) return false;
+
+    final sessionRepo = _sessionRepository;
+    final segmentRepo = _segmentRepository;
+    final startedAt = _captioningStartedAt;
+    if (sessionRepo == null || segmentRepo == null || startedAt == null) {
+      AppToast.error(StringKeys.somethingWentWrong.tr);
+      return false;
+    }
+
+    final transcriptText = transcript.value.trim();
+    if (transcriptText.isEmpty && transcriptSegments.isEmpty) {
+      discardPendingSession();
+      return false;
+    }
+
+    isSavingSession.value = true;
+
+    int? sessionId;
+    try {
+      final resolvedTitle = _resolveSessionTitle(title);
+      final startEpoch = startedAt.millisecondsSinceEpoch ~/ 1000;
+      final durationSec = captioningElapsed.value.inSeconds;
+      final endedAt = startEpoch + durationSec;
+
+      sessionId = await sessionRepo.createSession(
+        title: resolvedTitle,
+        startedAt: startEpoch,
+      );
+
+      await sessionRepo.finishSession(
+        id: sessionId,
+        endedAt: endedAt,
+        durationSec: durationSec,
+      );
+
+      final segments = mapConversationSegmentsToModels(
+        segments: _pendingSaveSegments,
+        sessionId: sessionId,
+        sessionStartedAt: startedAt,
+        durationSec: durationSec,
+        createdAtEpoch: endedAt,
+      );
+
+      if (segments.isNotEmpty) {
+        await segmentRepo.insertSegments(segments);
+      }
+
+      showSaveSessionPrompt.value = false;
+      _resetLiveSessionState();
+      _clearPendingSaveState();
+      _captioningStartedAt = null;
+      captioningElapsed.value = Duration.zero;
+
+      AppToast.success(StringKeys.homeSaveSessionSuccess.tr);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Save session failed: $error');
+      debugPrint('$stackTrace');
+      if (sessionId != null) {
+        try {
+          await sessionRepo.deleteSession(sessionId);
+        } catch (_) {
+          debugPrint('[Transcribe] Delete session failed: $error');
+        }
+      }
+      AppToast.error(StringKeys.somethingWentWrong.tr);
+      return false;
+    } finally {
+      isSavingSession.value = false;
+    }
+  }
+
+  Future<void> _navigateToHistory() async {
+    if (Get.isRegistered<MainController>()) {
+      Get.find<MainController>().selectTab(1);
+    }
+
+    if (Get.isRegistered<HistoryController>()) {
+      await Get.find<HistoryController>().refreshHistory();
+    }
+  }
+
+  String _resolveSessionTitle(String title) {
+    final trimmed = title.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+    return _sessionTitleForDate(
+      DateTime.now(),
+      prefixKey: StringKeys.homeSaveSessionAutoTitle,
+    );
+  }
+
+  String _sessionTitleForDate(DateTime date, {required String prefixKey}) {
+    final formattedDate =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    return prefixKey.trParams({'date': formattedDate});
+  }
+
+  void _resetLiveSessionState() {
+    summary.value = '';
+    statusMessage.value = '';
+    transcript.value = '';
+    transcriptSegments.clear();
+  }
+
+  void _clearPendingSaveState() {
+    _pendingSaveSegments = const [];
+    showSaveSessionPrompt.value = false;
   }
 
   Future<void> pauseCaptioning() async {
@@ -401,6 +588,6 @@ class HomeController extends GetxController {
     await _awaitPendingFinish();
 
     await _audioRecorderService.dispose();
-    _whisperKitService.dispose();
+    await _whisperKitService.dispose();
   }
 }

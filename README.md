@@ -25,6 +25,7 @@ fvm flutter pub get
 
 # Android — required after every pub get
 bash tool/setup_flutter_llama_android.sh
+bash tool/patch_whisper_kit_android.sh
 
 # iOS — required after every pub get
 bash tool/patch_whisper_kit_ios.sh
@@ -65,6 +66,7 @@ Debug logs: `[LiveTranscript]`, `[WhisperKit]`, `[Transcribe]`.
 
 | Issue | Fix |
 |-------|-----|
+| Android: `libwhisper.so` SIGSEGV on transcribe | `bash tool/patch_whisper_kit_android.sh`, then full rebuild |
 | Android: `flutter_llama` / CMake / `llama_context_type` errors | `bash tool/setup_flutter_llama_android.sh` after `pub get`, then full rebuild |
 | Android: CMake 3.19+ / `SPIRV-Headers` (`ggml-vulkan`) errors | Same script (disables Vulkan, uses CPU backend). Install CMake 3.22+ via Android SDK Manager if prompted |
 | iOS: whisper_kit compile / linker / `_ggml_*` errors | `bash tool/patch_whisper_kit_ios.sh`, then `cd ios && pod install` |
@@ -83,5 +85,6 @@ lib/
   screen/home/                # Live caption UI
 tool/
   setup_flutter_llama_android.sh
+  patch_whisper_kit_android.sh
   patch_whisper_kit_ios.sh
 ```

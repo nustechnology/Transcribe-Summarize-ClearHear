@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:transcribe_summarize_clearhear/arch/route/app_route.dart';
 import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
 import 'package:transcribe_summarize_clearhear/style/theme.dart';
 
@@ -28,7 +29,7 @@ class AppTitleBar extends StatelessWidget {
           ),
         ),
         IconButton(
-          onPressed: onActionPressed,
+          onPressed: onActionPressed ?? _openSettings,
           icon: actionIcon ??
               const Icon(
                 Icons.settings_outlined,
@@ -40,5 +41,9 @@ class AppTitleBar extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  void _openSettings() {
+    Get.rootDelegate.offNamed(AppRoutes.settings);
   }
 }
