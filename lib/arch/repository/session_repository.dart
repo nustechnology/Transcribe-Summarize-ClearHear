@@ -41,6 +41,9 @@ abstract class SessionRepository {
   /// Bulk-deletes sessions by id list. Returns the number of rows deleted.
   Future<int> deleteSessions(List<int> ids);
 
+  /// Deletes every session row (segments and FTS rows cascade).
+  Future<void> deleteAllSessions();
+
   /// Writes the AI-generated summary for [id].
   Future<void> updateSummary({required int id, required String summary});
 

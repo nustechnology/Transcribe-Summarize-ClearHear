@@ -16,7 +16,7 @@ class DatabaseService {
 
   // Initial schema version.
   // Increase this only when adding real migrations.
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
 
   Database? _db;
 
@@ -79,12 +79,13 @@ class DatabaseService {
     );
 
     // Future migrations go here.
-    //
-    // Example:
-    //
-    // if (oldVersion < 2) {
-    //   await _migrationV2(db);
-    // }
+    if (oldVersion < 2) {
+      await db.execute('''
+        UPDATE settings
+        SET font_size = MIN(MAX(font_size, 12.0), 20.0)
+        WHERE id = 1
+      ''');
+    }
   }
 
   void _createTables(Batch batch) {
@@ -127,8 +128,8 @@ class DatabaseService {
     batch.execute('''
       CREATE TABLE IF NOT EXISTS settings (
         id              INTEGER PRIMARY KEY CHECK (id = 1),
-        font_size       REAL    NOT NULL DEFAULT 20.0
-                                CHECK (font_size >= 12.0 AND font_size <= 48.0),
+        font_size       REAL    NOT NULL DEFAULT 16.0
+                                CHECK (font_size >= 12.0 AND font_size <= 20.0),
         theme           TEXT    NOT NULL DEFAULT 'system'
                                 CHECK (theme IN ('light', 'dark', 'system')),
         saving_enabled  INTEGER NOT NULL DEFAULT 1
@@ -221,7 +222,7 @@ class DatabaseService {
     batch.execute('''
       INSERT OR IGNORE INTO settings
         (id, font_size, theme, saving_enabled, keep_screen_on, power_saver, updated_at)
-      VALUES (1, 20.0, 'system', 1, 0, 0, $now)
+      VALUES (1, 16.0, 'system', 1, 0, 0, $now)
     ''');
   }
 

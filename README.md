@@ -65,11 +65,14 @@ Debug logs: `[LiveTranscript]`, `[WhisperKit]`, `[Transcribe]`.
 
 | Issue | Fix |
 |-------|-----|
-| Android: `flutter_llama` / CMake errors | `bash tool/setup_flutter_llama_android.sh`, then full rebuild |
-| iOS: whisper_kit compile / linker errors | `bash tool/patch_whisper_kit_ios.sh`, then `cd ios && pod install` |
-| `version solving failed` | Use `fvm flutter pub get` with the Flutter version from `.fvmrc` |
+| Android: `flutter_llama` / CMake / `llama_context_type` errors | `bash tool/setup_flutter_llama_android.sh` after `pub get`, then full rebuild |
+| Android: CMake 3.19+ / `SPIRV-Headers` (`ggml-vulkan`) errors | Same script (disables Vulkan, uses CPU backend). Install CMake 3.22+ via Android SDK Manager if prompted |
+| iOS: whisper_kit compile / linker / `_ggml_*` errors | `bash tool/patch_whisper_kit_ios.sh`, then `cd ios && pod install` |
+| iOS: duplicate `WhisperKitPlugin`, `UnsafeMutablePointer`, `AudioMetadata?`, VAD / vDSP errors | Same patch script as above |
+| `version solving failed` / `json_annotation` | Use `fvm flutter pub get` with the Flutter version from `.fvmrc` (currently **3.44.4**) |
 | `MissingPluginException` / mic unavailable | Full rebuild (`fvm flutter run`), not hot reload |
 | Whisper model download fails | Check network; retry on Wi‑Fi |
+| ANR / UI freeze during ML | Ensure heavy work stays off the UI thread; rebuild with latest code |
 
 ## Project layout
 
