@@ -1,32 +1,15 @@
-import 'dart:math';
 import 'package:get/get.dart';
-import 'package:transcribe_summarize_clearhear/arch/repository/segment_repository.dart';
-import 'package:transcribe_summarize_clearhear/arch/repository/session_repository.dart';
+import 'package:transcribe_summarize_clearhear/arch/repository/impl/segment_repository_impl.dart';
+import 'package:transcribe_summarize_clearhear/arch/repository/impl/session_repository_impl.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/segment_model.dart';
+import 'package:transcribe_summarize_clearhear/service/database_service.dart';
+import 'package:transcribe_summarize_clearhear/util/mock_history_data.dart';
 import 'package:transcribe_summarize_clearhear/util/logger/app_logger.dart';
 
 /// Helper class to populate the SQLite database with realistic sample data.
 class DebugSeed {
-  static const _summaries = [
-    'The team reviewed the current project progress, discussed upcoming milestones, identified several blockers, and agreed on the next development priorities for the upcoming sprint.',
-    'The meeting focused on task ownership, sprint planning, and resolving technical issues. Team members also reviewed recent progress and outlined action items for the next iteration.',
-    'Key decisions were made regarding the product roadmap, release timeline, and feature prioritization. The discussion also covered potential risks and strategies to improve delivery efficiency.',
-    'Participants shared customer feedback collected over the past week, discussed common user pain points, and agreed to prioritize several high-impact feature requests in the next release.',
-    'The session covered application performance improvements, database optimization strategies, and several code refactoring opportunities to improve long-term maintainability.',
-    'The team analyzed last week’s analytics, reviewed user engagement metrics, and discussed opportunities to improve onboarding, retention, and overall user experience.',
-    'Most of the conversation centered on sprint planning, workload distribution, dependency management, and ensuring that all deliverables remain on schedule before the next release.',
-    'The engineering team agreed on the implementation approach for the new authentication flow, reviewed security considerations, and finalized the technical design before development begins.',
-    'Several technical challenges were identified during implementation. Different solutions were evaluated, and the team selected the most maintainable approach while documenting future improvements.',
-    'The recording captured an open brainstorming session where participants proposed new product ideas, discussed future enhancements, evaluated feasibility, and prioritized features based on business value.',
-    'The discussion included updates from multiple departments, highlighted completed work, addressed outstanding issues, and concluded with a clear list of follow-up actions for each team member.',
-    'During the meeting, participants reviewed project status, clarified outstanding requirements, resolved open questions, and aligned on the implementation timeline for the remaining development tasks.',
-    'The conversation summarized recent development progress, highlighted successful feature deliveries, discussed testing results, and identified areas that require additional validation before release.',
-    'The session focused on improving collaboration across the team by reviewing communication processes, identifying workflow bottlenecks, and defining clear responsibilities for upcoming tasks.',
-    'The group discussed future product direction, evaluated customer feedback, reviewed technical constraints, and established a roadmap for implementing the most valuable enhancements over the coming months.',
-  ];
-
   static const _sampleSentences = [
-    "Hello, welcome to today's standup. anhnh3",
+    "Hello, welcome to today's standup.",
     "Let's start with Alice's update.",
     "We shipped the payment module yesterday.",
     "The client requested a change in the color scheme.",
@@ -49,62 +32,60 @@ class DebugSeed {
     'Q3 Budget meeting',
   ];
 
-  static final _random = Random();
-
   /// Populates the database with [sessionCount] sessions.
   /// Each session will have roughly [segmentsPerSession] segments.
   static Future<void> run({
     int sessionCount = 24,
     int segmentsPerSession = 50,
   }) async {
-    final sessionRepo = Get.find<SessionRepository>();
-    final segmentRepo = Get.find<SegmentRepository>();
-
-    AppLogger.info('🌱 [DebugSeed] Starting database seed...');
-
-    // Check if we already have data
     try {
-      final existing = await sessionRepo.getAllSessions(offset: 0, limit: 1);
-      if (existing.items.isNotEmpty) {
-        AppLogger.info(
-            '🌱 [DebugSeed] Database already has data. Skipping seed.');
+      final dbService = Get.find<DatabaseService>();
+      final sessionRepo = SessionRepositoryImpl(dbService);
+      final segmentRepo = SegmentRepositoryImpl(dbService);
+
+      AppLogger.info('🌱 [DebugSeed] Starting database seed...');
+
+      if (MockHistoryData.enabled) {
+        await _removeStaleMockSessions(sessionRepo);
+        await _insertMockSession(
+          dbService: dbService,
+          sessionRepo: sessionRepo,
+          segmentRepo: segmentRepo,
+        );
         return;
       }
 
-      AppLogger.info('🌱 [DebugSeed] running');
+      final existing = await sessionRepo.getAllSessions(offset: 0, limit: 1);
+      if (existing.items.isNotEmpty) {
+        AppLogger.info(
+          '🌱 [DebugSeed] Database already has data. Skipping seed.',
+        );
+        return;
+      }
+
+      AppLogger.info('🌱 [DebugSeed] running bulk seed');
       final now = DateTime.now();
 
       for (int i = 0; i < sessionCount; i++) {
         AppLogger.info('🌱 [DebugSeed] Session ${i + 1}/$sessionCount');
-        // Sessions are spread out over the last 30 days
         final startedAt = now.subtract(Duration(days: i, hours: i * 3));
         final startEpoch = startedAt.millisecondsSinceEpoch ~/ 1000;
 
-        // Simulate sessions of 15 to 60 minutes
-        final durationSec = 900 + (i * 120 % 2700);
+        const durationSec = 1280;
         final endEpoch = startEpoch + durationSec;
 
-        // 1. Create Session
         final sessionId = await sessionRepo.createSession(
           title: _titles[i % _titles.length],
           startedAt: startEpoch,
           language: 'en',
         );
 
-        // Finish session immediately
         await sessionRepo.finishSession(
           id: sessionId,
           endedAt: endEpoch,
           durationSec: durationSec,
         );
 
-        // Add a summary for even-numbered sessions
-        await sessionRepo.updateSummary(
-          id: sessionId,
-          summary: _summaries[_random.nextInt(_summaries.length)],
-        );
-
-        // 2. Generate Segments
         final chunkDurationMs = (durationSec * 1000) ~/ segmentsPerSession;
         final segments = <SegmentModel>[];
 
@@ -120,22 +101,117 @@ class DebugSeed {
               text: _sampleSentences[(i + j) % _sampleSentences.length],
               isFinal: true,
               confidence: 0.85 + ((j % 15) / 100),
-              // Randomize between 0.85 - 0.99
               createdAt: endEpoch,
             ),
           );
         }
 
-        // Batch insert segments
         await segmentRepo.insertSegments(segments);
 
         AppLogger.info(
-            '🌱 [DebugSeed] Inserted session $sessionId with ${segments.length} segments.');
+          '🌱 [DebugSeed] Inserted session $sessionId with ${segments.length} segments.',
+        );
       }
 
       AppLogger.info('🌱 [DebugSeed] Database seed complete!');
     } catch (error) {
       AppLogger.error(error: error);
     }
+  }
+
+  static Future<void> _removeStaleMockSessions(
+    SessionRepositoryImpl sessionRepo,
+  ) async {
+    final page = await sessionRepo.getAllSessions(offset: 0, limit: 200);
+    final staleIds = page.items
+        .where((session) => session.title.startsWith('[Mock]'))
+        .map((session) => session.id!)
+        .toList();
+    if (staleIds.isEmpty) return;
+
+    await sessionRepo.deleteSessions(staleIds);
+    AppLogger.info(
+      '🌱 [DebugSeed] Removed ${staleIds.length} stale mock session(s).',
+    );
+  }
+
+  static Future<void> _insertMockSession({
+    required DatabaseService dbService,
+    required SessionRepositoryImpl sessionRepo,
+    required SegmentRepositoryImpl segmentRepo,
+  }) async {
+    AppLogger.info('🌱 [DebugSeed] Inserting mock session for AI summary test');
+
+    if (MockHistoryData.transcriptSegments.isEmpty) {
+      AppLogger.warning(
+        '🌱 [DebugSeed] No transcript segments configured for mock session.',
+      );
+      return;
+    }
+
+    final now = DateTime.now();
+    final startedAt = now.subtract(const Duration(minutes: 12));
+    final startEpoch = startedAt.millisecondsSinceEpoch ~/ 1000;
+    const durationSec = 1280;
+    final endEpoch = startEpoch + durationSec;
+
+    final sessionId = await sessionRepo.createSession(
+      title: MockHistoryData.title,
+      startedAt: startEpoch,
+      language: 'en',
+    );
+
+    await sessionRepo.finishSession(
+      id: sessionId,
+      endedAt: endEpoch,
+      durationSec: durationSec,
+    );
+
+    if (MockHistoryData.summaryText.trim().isNotEmpty) {
+      await sessionRepo.updateSummary(
+        id: sessionId,
+        summary: MockHistoryData.summaryText,
+      );
+      final db = await dbService.database;
+      await db.update(
+        'sessions',
+        {'summary_status': 'ready', 'summary_error': null},
+        where: 'id = ?',
+        whereArgs: [sessionId],
+      );
+    }
+
+    final chunkDurationMs =
+        (durationSec * 1000) ~/ MockHistoryData.transcriptSegments.length;
+    final segments = <SegmentModel>[];
+
+    for (int j = 0; j < MockHistoryData.transcriptSegments.length; j++) {
+      final startMs = j * chunkDurationMs;
+      final endMs = startMs + chunkDurationMs;
+
+      segments.add(
+        SegmentModel(
+          sessionId: sessionId,
+          startMs: startMs,
+          endMs: endMs,
+          text: MockHistoryData.transcriptSegments[j],
+          isFinal: true,
+          confidence: 0.95,
+          createdAt: endEpoch,
+        ),
+      );
+    }
+
+    await segmentRepo.insertSegments(segments);
+
+    final wordCount = MockHistoryData.transcriptSegments
+        .join(' ')
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .length;
+    AppLogger.info(
+      '🌱 [DebugSeed] Inserted mock session $sessionId with '
+      '${segments.length} segments (~$wordCount words).',
+    );
   }
 }

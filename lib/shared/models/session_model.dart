@@ -8,6 +8,8 @@ class SessionModel {
     this.durationSec,
     this.isSaved = true,
     this.summary,
+    this.summaryStatus = 'idle',
+    this.summaryError,
     this.language = 'auto',
     required this.createdAt,
   });
@@ -29,6 +31,12 @@ class SessionModel {
   /// Null until AI summary is generated.
   final String? summary;
 
+  /// `idle`, `processing`, `ready`, or `failed_resource`.
+  final String summaryStatus;
+
+  /// Optional failure detail for logging / diagnostics.
+  final String? summaryError;
+
   final String language;
 
   /// Unix epoch (seconds).
@@ -42,6 +50,8 @@ class SessionModel {
     int? durationSec,
     bool? isSaved,
     String? summary,
+    String? summaryStatus,
+    String? summaryError,
     String? language,
     int? createdAt,
   }) {
@@ -53,6 +63,8 @@ class SessionModel {
       durationSec: durationSec ?? this.durationSec,
       isSaved: isSaved ?? this.isSaved,
       summary: summary ?? this.summary,
+      summaryStatus: summaryStatus ?? this.summaryStatus,
+      summaryError: summaryError ?? this.summaryError,
       language: language ?? this.language,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -67,6 +79,8 @@ class SessionModel {
       'duration_sec': durationSec,
       'is_saved': isSaved ? 1 : 0,
       'summary': summary,
+      'summary_status': summaryStatus,
+      'summary_error': summaryError,
       'language': language,
       'created_at': createdAt,
     };
@@ -81,10 +95,20 @@ class SessionModel {
       durationSec: map['duration_sec'] as int?,
       isSaved: (map['is_saved'] as int? ?? 1) == 1,
       summary: map['summary'] as String?,
+      summaryStatus: map['summary_status'] as String? ?? 'idle',
+      summaryError: map['summary_error'] as String?,
       language: map['language'] as String? ?? 'auto',
       createdAt: map['created_at'] as int,
     );
   }
+
+  bool get isSummaryProcessing =>
+      summaryStatus == 'queued' || summaryStatus == 'processing';
+
+  bool get hasSummary =>
+      (summary?.trim().isNotEmpty ?? false) && summaryStatus == 'ready';
+
+  bool get hasSummaryFailed => summaryStatus.startsWith('failed');
 
   @override
   String toString() =>

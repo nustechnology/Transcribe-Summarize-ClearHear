@@ -54,6 +54,14 @@ Defaults are in `lib/config/ml_model_config.dart`:
 
 Whisper downloads automatically on first use, then works offline. Change `whisperModelName` to `base` or `small` for better accuracy at the cost of speed.
 
+The summarization GGUF (`assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf`) is stored with **Git LFS**. After cloning:
+
+```bash
+git lfs install
+git lfs pull
+ls -lh assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf   # should be ~469 MB
+```
+
 ## Captioning flow
 
 1. **Start** — mic streams PCM; segments save as WAV when silence is detected.
@@ -74,6 +82,7 @@ Debug logs: `[LiveTranscript]`, `[WhisperKit]`, `[Transcribe]`.
 | `version solving failed` / `json_annotation` | Use `fvm flutter pub get` with the Flutter version from `.fvmrc` (currently **3.44.4**) |
 | `MissingPluginException` / mic unavailable | Full rebuild (`fvm flutter run`), not hot reload |
 | Whisper model download fails | Check network; retry on Wi‑Fi |
+| Summary model fails to load (`INIT_FAILED`) | The GGUF in `assets/models/` is tracked by Git LFS. Install [Git LFS](https://git-lfs.com), run `git lfs pull`, confirm the file is ~469 MB (not a 134-byte pointer), then full rebuild |
 | ANR / UI freeze during ML | Ensure heavy work stays off the UI thread; rebuild with latest code |
 
 ## Project layout

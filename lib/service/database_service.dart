@@ -16,7 +16,7 @@ class DatabaseService {
 
   // Initial schema version.
   // Increase this only when adding real migrations.
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
 
   Database? _db;
 
@@ -78,13 +78,45 @@ class DatabaseService {
       '[DB] Upgrade $oldVersion → $newVersion',
     );
 
-    // Future migrations go here.
     if (oldVersion < 2) {
       await db.execute('''
         UPDATE settings
         SET font_size = MIN(MAX(font_size, 12.0), 20.0)
         WHERE id = 1
       ''');
+    }
+
+    if (oldVersion < 3) {
+      await _addColumnIfMissing(
+        db,
+        'sessions',
+        'summary_status',
+        "TEXT NOT NULL DEFAULT 'idle'",
+      );
+      await _addColumnIfMissing(
+        db,
+        'sessions',
+        'summary_error',
+        'TEXT',
+      );
+      await db.execute('''
+        UPDATE sessions
+        SET summary_status = 'ready'
+        WHERE summary IS NOT NULL AND TRIM(summary) != ''
+      ''');
+    }
+  }
+
+  Future<void> _addColumnIfMissing(
+    Database db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    final rows = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = rows.any((row) => row['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
     }
   }
 
@@ -100,6 +132,8 @@ class DatabaseService {
         is_saved     INTEGER NOT NULL DEFAULT 1
                              CHECK (is_saved IN (0, 1)),
         summary      TEXT,
+        summary_status TEXT NOT NULL DEFAULT 'idle',
+        summary_error TEXT,
         language     TEXT    NOT NULL DEFAULT 'auto',
         created_at   INTEGER NOT NULL
       )

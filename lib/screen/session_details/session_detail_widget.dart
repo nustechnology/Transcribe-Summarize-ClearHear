@@ -57,13 +57,47 @@ class SessionDetailView extends GetView<SessionDetailController> {
             ),
           ),
           body: SafeArea(
-            child: controller.isLoading.value
-                ? const Center(child: AppLoading())
+            child: controller.isLoading.value && controller.session.value == null
+                ? _buildLoadingSkeleton()
                 : _buildContent(context),
           ),
         ),
       );
     });
+  }
+
+  Widget _buildLoadingSkeleton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          _skeletonBox(height: 24, width: 220),
+          const SizedBox(height: 8),
+          _skeletonBox(height: 14, width: 140),
+          const SizedBox(height: 24),
+          _skeletonBox(height: 140),
+          const SizedBox(height: 24),
+          _skeletonBox(height: 18, width: 120),
+          const SizedBox(height: 12),
+          _skeletonBox(height: 72),
+          const SizedBox(height: 12),
+          _skeletonBox(height: 72),
+        ],
+      ),
+    );
+  }
+
+  Widget _skeletonBox({required double height, double? width}) {
+    return Container(
+      height: height,
+      width: width ?? double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.border.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
   }
 
   Future<void> _showDeleteConfirmation(BuildContext context) async {
@@ -156,7 +190,14 @@ class SessionDetailView extends GetView<SessionDetailController> {
                         onTitleEditingChanged: controller.setTitleEditing,
                       ),
                       const SizedBox(height: 24),
-                      SummarySection(content: session.summary ?? ""),
+                      SummarySection(
+                        content: controller.summaryText,
+                        isProcessing: controller.isShowingSummaryLoading,
+                        isFailed: controller.isSummaryFailed,
+                        failureMessage: controller.summaryFailureMessage,
+                        isRetrying: controller.isRetryingSummary.value,
+                        onRetry: controller.retrySummary,
+                      ),
                       const SizedBox(height: 24),
                       _TranscriptSection(
                         segments: controller.segments,
