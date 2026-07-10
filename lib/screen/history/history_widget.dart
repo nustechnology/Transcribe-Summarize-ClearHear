@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/shared/widgets/app_titlebar.dart';
 
+import '../../style/theme.dart';
 import 'controllers/history_controller.dart';
 import 'widgets/history_footer_note.dart';
 import 'widgets/history_header.dart';
@@ -22,6 +23,7 @@ class HistoryView extends GetView<HistoryController> {
           }
         },
         child: const Scaffold(
+          backgroundColor: AppColors.surface,
           body: SafeArea(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 20.0),
