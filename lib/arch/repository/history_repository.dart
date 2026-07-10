@@ -39,6 +39,19 @@ class HistoryRepository {
     }
   }
 
+  Future<HistoryItem?> getSession(String id) async {
+    try {
+      final intId = int.tryParse(id);
+      if (intId == null) return null;
+      final session = await _sessionRepository.getSession(intId);
+      if (session == null) return null;
+      return _toHistoryItem(session);
+    } catch (error, stackTrace) {
+      AppLogger.error(error: error, stackTrace: stackTrace);
+      return null;
+    }
+  }
+
   Future<bool> updateSessionTitle(String id, String newTitle) async {
     try {
       final intId = int.tryParse(id);
@@ -83,16 +96,54 @@ class HistoryRepository {
   // ── Mapping ───────────────────────────────────────────────────────────────
 
   static HistoryItem _toHistoryItem(SessionModel session) {
+    final status = session.summaryStatus;
+    final snippet = _previewForSession(session);
+
     return HistoryItem(
       id: '${session.id}',
       title: session.title,
       timestamp: DateTime.fromMillisecondsSinceEpoch(
         session.startedAt * 1000,
       ),
-      snippet: session.summary ?? '',
+      snippet: snippet,
+      summaryStatus: status,
       duration: session.durationSec ?? 0,
       speakerCount: 1,
       category: 'session',
     );
+  }
+
+  static String _previewForSession(SessionModel session) {
+    if (session.hasSummary) {
+      return _summaryPreview(session.summary!.trim());
+    }
+    if (session.isSummaryProcessing) {
+      return '[Generating summary...]';
+    }
+    if (session.endedAt != null &&
+        (session.summary?.trim().isEmpty ?? true) &&
+        session.summaryStatus == 'idle') {
+      return '[Generating summary...]';
+    }
+    if (session.hasSummaryFailed) {
+      if (session.summaryStatus == 'failed_resource') {
+        return 'Summary generation failed due to system resource limits.';
+      }
+      return 'Summary generation failed.';
+    }
+    return session.summary?.trim() ?? '';
+  }
+
+  static String _summaryPreview(String summary) {
+    final lines = summary
+        .replaceAll('\r\n', '\n')
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    if (lines.isEmpty) return '';
+    if (lines.length == 1) return lines.first;
+    return lines.take(2).join('\n');
   }
 }

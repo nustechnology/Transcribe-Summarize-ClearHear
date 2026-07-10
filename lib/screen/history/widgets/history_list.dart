@@ -72,27 +72,9 @@ class HistoryList extends GetView<HistoryController> {
               }
 
               final item = items[index];
-              return Dismissible(
-                key: ValueKey('dismiss_${item.id}'),
-                direction: isSelectionMode
-                    ? DismissDirection.none
-                    : DismissDirection.endToStart,
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(Icons.delete_outline, color: Colors.white),
-                ),
-                confirmDismiss: (_) async {
-                  return await controller.deleteItem(item.id);
-                },
-                child: HistoryCard(
-                  key: ValueKey(item.id),
-                  item: item,
-                ),
+              return HistoryCard(
+                key: ValueKey(item.id),
+                item: item,
               );
             },
           ),

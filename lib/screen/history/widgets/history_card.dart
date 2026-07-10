@@ -90,6 +90,7 @@ class HistoryCard extends GetView<HistoryController> {
                                     controller.updateTitle(item.id, newTitle),
                                 onTapSelectionMode: () =>
                                     controller.toggleItemSelection(item.id),
+                                onTap: () => controller.openDetail(item.id),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -111,7 +112,7 @@ class HistoryCard extends GetView<HistoryController> {
                     Padding(
                       padding: const EdgeInsets.only(left: 56),
                       child: HighlightedText(
-                        text: item.snippet,
+                        text: _previewTextForItem(item),
                         keyword: controller.searchQuery.value,
                         enabled: controller.isSearching.value,
                         maxLines: 2,
@@ -138,6 +139,22 @@ class HistoryCard extends GetView<HistoryController> {
       );
     });
   }
+}
+
+String _previewTextForItem(HistoryItem item) {
+  if (item.summaryStatus == 'processing' || item.summaryStatus == 'queued') {
+    return '[Generating summary...]';
+  }
+  if (item.summaryStatus == 'failed_resource') {
+    return 'Summary generation failed due to system resource limits.';
+  }
+  if (item.summaryStatus.startsWith('failed')) {
+    return 'Summary generation failed.';
+  }
+  if (item.summaryStatus == 'idle' && item.snippet.trim().isEmpty) {
+    return '[Generating summary...]';
+  }
+  return item.snippet;
 }
 
 class HistoryBadge extends StatelessWidget {

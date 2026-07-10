@@ -11,6 +11,7 @@ class InlineEditableTitle extends StatefulWidget {
     this.isSelectionMode = false,
     this.searchKeyword = '',
     this.onTapSelectionMode,
+    this.onTap,
     this.onEditingChanged,
     this.textStyle = const TextStyle(
       fontSize: 16,
@@ -27,6 +28,7 @@ class InlineEditableTitle extends StatefulWidget {
   final String searchKeyword;
   final Future<void> Function(String title) onSave;
   final VoidCallback? onTapSelectionMode;
+  final VoidCallback? onTap;
   final ValueChanged<bool>? onEditingChanged;
   final TextStyle textStyle;
   final TextStyle? inputStyle;
@@ -65,12 +67,19 @@ class _InlineEditableTitleState extends State<InlineEditableTitle> {
     }
   }
 
-  void _startEditing() {
+  void _handleTitleTap() {
     if (widget.isSelectionMode) {
       widget.onTapSelectionMode?.call();
       return;
     }
+    if (widget.onTap != null) {
+      widget.onTap!();
+      return;
+    }
+    _startEditing();
+  }
 
+  void _startEditing() {
     setState(() {
       _isEditing = true;
       _textController.text = widget.initialTitle;
@@ -139,7 +148,8 @@ class _InlineEditableTitleState extends State<InlineEditableTitle> {
       children: [
         Expanded(
           child: GestureDetector(
-            onTap: _startEditing,
+            onTap: _handleTitleTap,
+            onLongPress: widget.onTap == null ? _startEditing : null,
             child: HighlightedText(
               text: widget.initialTitle,
               keyword: widget.searchKeyword,

@@ -1,17 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
 import 'package:transcribe_summarize_clearhear/style/theme.dart';
 
 class SummarySection extends StatelessWidget {
-  final String title;
-  final String source;
-  final String content;
-
   const SummarySection({
     super.key,
-    this.title = 'Summary',
-    this.source = 'on-device',
     required this.content,
+    this.isProcessing = false,
+    this.isFailed = false,
+    this.failureMessage = '',
+    this.isRetrying = false,
+    this.onRetry,
+    this.title,
+    this.source,
   });
+
+  final String content;
+  final bool isProcessing;
+  final bool isFailed;
+  final String failureMessage;
+  final bool isRetrying;
+  final VoidCallback? onRetry;
+  final String? title;
+  final String? source;
 
   @override
   Widget build(BuildContext context) {
@@ -36,15 +48,90 @@ class SummarySection extends StatelessWidget {
         children: [
           _buildHeader(),
           const SizedBox(height: 18),
-          Text(
-            content,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 15,
-              height: 1.5,
+          _buildBody(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (content.isNotEmpty) {
+      return SelectableText(
+        content,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 15,
+          height: 1.5,
+        ),
+      );
+    }
+
+    if (isFailed) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              failureMessage,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 15,
+                height: 1.5,
+              ),
+            ),
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: isRetrying ? null : onRetry,
+              icon: isRetrying
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 16),
+              label: Text(
+                isRetrying
+                    ? StringKeys.commonRetrying.tr
+                    : StringKeys.commonRetry.tr,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    if (isProcessing) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              StringKeys.historyDetailGeneratingSummary.tr,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 15,
+                height: 1.5,
+              ),
             ),
           ),
         ],
+      );
+    }
+
+    return Text(
+      StringKeys.historyDetailPlaceholderSummary.tr,
+      style: const TextStyle(
+        color: AppColors.textSecondary,
+        fontSize: 15,
+        height: 1.5,
       ),
     );
   }
@@ -59,7 +146,7 @@ class SummarySection extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Text(
-          title,
+          title ?? StringKeys.historyDetailSummaryLabel.tr,
           style: const TextStyle(
             color: AppColors.summaryPurple,
             fontSize: 15,
@@ -75,7 +162,7 @@ class SummarySection extends StatelessWidget {
         ),
         const SizedBox(width: 6),
         Text(
-          source,
+          source ?? StringKeys.historyDetailOnDevice.tr,
           style: const TextStyle(
             color: AppColors.textSecondary,
             fontSize: 13,
@@ -94,23 +181,24 @@ class SummarySection extends StatelessWidget {
         vertical: 5,
       ),
       decoration: BoxDecoration(
-          color: AppColors.privateBackground,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: AppColors.historyBadgeMeeting,
-          )),
-      child: const Row(
+        color: AppColors.privateBackground,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.historyBadgeMeeting,
+        ),
+      ),
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
+          const Icon(
             Icons.admin_panel_settings_outlined,
             size: 18,
             color: AppColors.primary,
           ),
-          SizedBox(width: 4),
+          const SizedBox(width: 4),
           Text(
-            'Private',
-            style: TextStyle(
+            StringKeys.historyDetailPrivate.tr,
+            style: const TextStyle(
               color: AppColors.primary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
