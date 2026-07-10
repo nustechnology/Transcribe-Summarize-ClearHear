@@ -1,6 +1,5 @@
 import 'package:get/get.dart';
-
-import '../../../arch/route/app_route.dart';
+import 'package:transcribe_summarize_clearhear/arch/route/app_route.dart';
 
 class MainController extends GetxController {
   static const tabRoutes = [

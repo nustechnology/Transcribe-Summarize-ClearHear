@@ -164,10 +164,6 @@ class HistoryController extends GetxController {
       final deletedCount = await _historyRepository.deleteSessions([id]);
 
       if (deletedCount > 0) {
-        items.removeWhere((item) => item.id == id);
-        searchResults.removeWhere((hit) => hit.item.id == id);
-        _offset = items.length;
-
         AppToast.sessionDeleted(
           title: StringKeys.historyDeleteSuccess.trParams({
             'count': '1',
@@ -186,6 +182,12 @@ class HistoryController extends GetxController {
     } finally {
       isDeleting.value = false;
     }
+  }
+
+  void removeItem(String id) {
+    items.removeWhere((item) => item.id == id);
+    searchResults.removeWhere((hit) => hit.item.id == id);
+    _offset = items.length;
   }
 
   Future<void> executeDeleteSelected() async {
