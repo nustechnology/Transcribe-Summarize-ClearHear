@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "85779059308",
+    "project_id": "clearhear-f3115",
+    "storage_bucket": "clearhear-f3115.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:85779059308:android:482707e308b42529e33e49",
+        "android_client_info": {
+          "package_name": "com.nus.clearhear"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB52ct14-oy6IFe4T7r54ywXR2fPT5mjGM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
