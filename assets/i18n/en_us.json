@@ -111,5 +111,6 @@
   "settings_help_support": "Help & Support",
   "settings_help_support_body": "For help with ClearHear, visit our support page or contact us at support@clearhear.app.",
   "settings_version": "Version",
-  "settings_done": "Done"
+  "settings_done": "Done",
+  "session_offline": "Offline"
 }

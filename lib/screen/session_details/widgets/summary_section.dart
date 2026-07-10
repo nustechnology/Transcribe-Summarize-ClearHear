@@ -12,8 +12,6 @@ class SummarySection extends StatelessWidget {
     this.failureMessage = '',
     this.isRetrying = false,
     this.onRetry,
-    this.title,
-    this.source,
   });
 
   final String content;
@@ -22,8 +20,6 @@ class SummarySection extends StatelessWidget {
   final String failureMessage;
   final bool isRetrying;
   final VoidCallback? onRetry;
-  final String? title;
-  final String? source;
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +142,7 @@ class SummarySection extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Text(
-          title ?? StringKeys.historyDetailSummaryLabel.tr,
+          StringKeys.historyDetailSummaryLabel.tr,
           style: const TextStyle(
             color: AppColors.summaryPurple,
             fontSize: 15,
@@ -162,7 +158,7 @@ class SummarySection extends StatelessWidget {
         ),
         const SizedBox(width: 6),
         Text(
-          source ?? StringKeys.historyDetailOnDevice.tr,
+          StringKeys.historyDetailOnDevice.tr,
           style: const TextStyle(
             color: AppColors.textSecondary,
             fontSize: 13,
@@ -181,12 +177,11 @@ class SummarySection extends StatelessWidget {
         vertical: 5,
       ),
       decoration: BoxDecoration(
-        color: AppColors.privateBackground,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.historyBadgeMeeting,
-        ),
-      ),
+          color: AppColors.privateBackground,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.historyBadgeMeeting,
+          )),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

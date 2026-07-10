@@ -5,11 +5,13 @@ import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
 import 'package:transcribe_summarize_clearhear/style/theme.dart';
 
 class AppTitleBar extends StatelessWidget {
+  final bool showActionIcon;
   final Widget? actionIcon;
   final VoidCallback? onActionPressed;
 
   const AppTitleBar({
     super.key,
+    this.showActionIcon = true,
     this.actionIcon,
     this.onActionPressed,
   });
@@ -28,17 +30,18 @@ class AppTitleBar extends StatelessWidget {
             letterSpacing: -0.5,
           ),
         ),
-        IconButton(
-          onPressed: onActionPressed ?? _openSettings,
-          icon: actionIcon ??
-              const Icon(
-                Icons.settings_outlined,
-                color: AppColors.textPrimary,
-                size: 24,
-              ),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-        ),
+        if (showActionIcon)
+          IconButton(
+            onPressed: onActionPressed ?? _openSettings,
+            icon: actionIcon ??
+                const Icon(
+                  Icons.settings_outlined,
+                  color: AppColors.textPrimary,
+                  size: 24,
+                ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          ),
       ],
     );
   }

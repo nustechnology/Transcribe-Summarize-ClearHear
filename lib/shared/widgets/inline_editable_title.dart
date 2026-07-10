@@ -140,6 +140,7 @@ class _InlineEditableTitleState extends State<InlineEditableTitle> {
         maxLines: widget.maxLines,
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => _focusNode.unfocus(),
+        onTapOutside: (_) => _focusNode.unfocus(),
       );
     }
 

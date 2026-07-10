@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
 import 'package:transcribe_summarize_clearhear/shared/widgets/inline_editable_title.dart';
 import 'package:transcribe_summarize_clearhear/style/theme.dart';
+import 'package:get/get.dart';
 
 class SessionTitle extends StatelessWidget {
   const SessionTitle({
@@ -58,21 +60,24 @@ class SessionTitle extends StatelessWidget {
                   color: AppColors.title,
                 ),
               ),
-              Row(
-                children: [
-                  _MetaText(text: date),
-                  const _Dot(),
-                  _MetaText(text: duration),
-                  const _Dot(),
-                  const Icon(
-                    Icons.cloud_off_outlined,
-                    size: 16,
-                    color: AppColors.gray,
-                  ),
-                  const SizedBox(width: 4),
-                  const _MetaText(text: "offline"),
-                ],
-              ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _MetaText(text: date),
+                    const _Dot(),
+                    _MetaText(text: duration),
+                    const _Dot(),
+                    const Icon(
+                      Icons.cloud_off_outlined,
+                      size: 16,
+                      color: AppColors.gray,
+                    ),
+                    const SizedBox(width: 4),
+                    _MetaText(text: StringKeys.sessionOffline.tr),
+                  ],
+                ),
+              )
             ],
           ),
         ),

@@ -126,6 +126,7 @@ abstract class StringKeys {
   static const settingsHelpSupportBody = 'settings_help_support_body';
   static const settingsVersion = 'settings_version';
   static const settingsDone = 'settings_done';
+  static const sessionOffline = 'session_offline';
 
   static String t(String key) => key.tr;
 }
