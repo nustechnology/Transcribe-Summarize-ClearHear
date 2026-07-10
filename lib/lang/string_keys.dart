@@ -59,9 +59,11 @@ abstract class StringKeys {
   static const historyDeleteConfirmMessage = 'history_delete_confirm_message';
   static const historyDeleteConfirmAction = 'history_delete_confirm_action';
   static const historyDeleteSuccess = 'history_delete_success';
+  static const historyDeleteRemovedNote = 'history_delete_removed_note';
   static const historyDetailShare = 'history_detail_share';
   static const historyDetailDelete = 'history_detail_delete';
   static const commonRetry = 'commonRetry';
+  static const commonRetrying = 'commonRetrying';
   static const historyDetailSummaryLabel = 'history_detail_summary_label';
   static const historyDetailTranscriptLabel = 'history_detail_transcript_label';
   static const historyDetailNoTranscript = 'history_detail_no_transcript';
@@ -69,6 +71,11 @@ abstract class StringKeys {
   static const historyDetailPrivate = 'history_detail_private';
   static const historyDetailPlaceholderSummary =
       'history_detail_placeholder_summary';
+  static const historyDetailGeneratingSummary =
+      'history_detail_generating_summary';
+  static const historyDetailSummaryFailed = 'history_detail_summary_failed';
+  static const historyDetailSummaryFailedResource =
+      'history_detail_summary_failed_resource';
   static const transcriptHeaderDate = 'transcript_header_date';
   static const transcriptHeaderDuration = 'transcript_header_duration';
   static const transcriptHeaderSummary = 'transcript_header_summary';

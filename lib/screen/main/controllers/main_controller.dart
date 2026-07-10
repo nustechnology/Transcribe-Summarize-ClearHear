@@ -37,8 +37,13 @@ class MainController extends GetxController {
   String get _activeTabRoute {
     final config = Get.rootDelegate.currentConfiguration;
     final currentPage = config?.currentPage?.name;
-    if (currentPage != null && tabRoutes.contains(currentPage)) {
-      return currentPage;
+    if (currentPage != null) {
+      if (tabRoutes.contains(currentPage)) {
+        return currentPage;
+      }
+      if (currentPage.startsWith('${AppRoutes.history}/')) {
+        return AppRoutes.history;
+      }
     }
     return Get.currentRoute;
   }

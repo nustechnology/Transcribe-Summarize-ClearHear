@@ -28,6 +28,20 @@ class AppToast {
     required String title,
     String? subtitle,
   }) {
+    _showSessionActionBanner(title: title, subtitle: subtitle);
+  }
+
+  static void sessionDeleted({
+    required String title,
+    String? subtitle,
+  }) {
+    _showSessionActionBanner(title: title, subtitle: subtitle);
+  }
+
+  static void _showSessionActionBanner({
+    required String title,
+    String? subtitle,
+  }) {
     final cleanedSubtitle =
         subtitle?.replaceFirst(RegExp(r'^\s*-\s*'), '').trim();
 

@@ -56,10 +56,15 @@ abstract final class _WaveformMetrics {
   static const minBarHeight = 8.0;
   static const maxBarHeight = 32.0;
   static const barInterval = Duration(milliseconds: 180);
-  static const scrollDuration = Duration(milliseconds: 200);
-  static const maxStoredBars = 120;
+  /// Extra bars kept off-screen so content stays wider than the viewport.
+  static const barBuffer = 48;
 
   static double get barStep => barWidth + barGap;
+
+  static int maxBarsForWidth(double viewportWidth) {
+    final visibleBars = (viewportWidth / barStep).ceil();
+    return visibleBars + barBuffer;
+  }
 
   static double rmsFromPcmChunk(Uint8List bytes) {
     if (bytes.isEmpty) return 0;
@@ -110,38 +115,9 @@ mixin _WaveformScrollBehavior<T extends StatefulWidget> on State<T> {
   void scrollWaveformToEnd() {
     if (!waveformScrollController.hasClients) return;
 
-    final target = waveformScrollController.position.maxScrollExtent;
-    if ((target - waveformScrollController.offset).abs() < 0.5) return;
-
-    waveformScrollController.animateTo(
-      target,
-      duration: _WaveformMetrics.scrollDuration,
-      curve: Curves.linear,
+    waveformScrollController.jumpTo(
+      waveformScrollController.position.maxScrollExtent,
     );
-  }
-
-  void trimWaveformBars(List<double> bars) {
-    if (!waveformScrollController.hasClients ||
-        bars.length <= _WaveformMetrics.maxStoredBars) {
-      return;
-    }
-
-    final scrolledBars =
-        (waveformScrollController.offset / _WaveformMetrics.barStep).floor();
-    final removeCount = math.min(
-      scrolledBars - 6,
-      bars.length - _WaveformMetrics.maxStoredBars,
-    );
-    if (removeCount <= 0) return;
-
-    setState(() {
-      bars.removeRange(0, removeCount);
-    });
-
-    final nextOffset = (waveformScrollController.offset -
-            removeCount * _WaveformMetrics.barStep)
-        .clamp(0.0, double.infinity);
-    waveformScrollController.jumpTo(nextOffset);
   }
 }
 
@@ -218,6 +194,8 @@ class _LiveWaveformState extends State<_LiveWaveform>
   Timer? _timer;
   StreamSubscription<Uint8List>? _chunkSubscription;
   double _windowPeak = 0;
+  late int _maxBars;
+  var _scrollCompensation = 0.0;
 
   @override
   ScrollController get waveformScrollController => _scrollController;
@@ -225,8 +203,17 @@ class _LiveWaveformState extends State<_LiveWaveform>
   @override
   void initState() {
     super.initState();
+    _maxBars = _WaveformMetrics.maxBarsForWidth(widget.size.width);
     _chunkSubscription = widget.recorder.onAudioChunks.listen(_onAudioChunk);
     _timer = Timer.periodic(_WaveformMetrics.barInterval, _onInterval);
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveWaveform oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.size.width != widget.size.width) {
+      _maxBars = _WaveformMetrics.maxBarsForWidth(widget.size.width);
+    }
   }
 
   @override
@@ -252,12 +239,24 @@ class _LiveWaveformState extends State<_LiveWaveform>
 
     setState(() {
       _bars.add(_WaveformMetrics.heightFromRms(peak));
+      if (_bars.length > _maxBars) {
+        final removeCount = _bars.length - _maxBars;
+        _bars.removeRange(0, removeCount);
+        _scrollCompensation += removeCount * _WaveformMetrics.barStep;
+      }
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || !waveformScrollController.hasClients) return;
+
+      if (_scrollCompensation > 0) {
+        final controller = waveformScrollController;
+        controller.jumpTo(
+          (controller.offset - _scrollCompensation).clamp(0.0, double.infinity),
+        );
+        _scrollCompensation = 0;
+      }
       scrollWaveformToEnd();
-      trimWaveformBars(_bars);
     });
   }
 
