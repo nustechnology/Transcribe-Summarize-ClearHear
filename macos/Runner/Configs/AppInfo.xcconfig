@@ -8,7 +8,7 @@
 PRODUCT_NAME = ClearHear
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.clearhear.transcribeSummarizeClearhear
+PRODUCT_BUNDLE_IDENTIFIER = com.nus.clearhear
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.clearhear. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 com.nus.clearhear. All rights reserved.
