@@ -1,4 +1,4 @@
-package com.clearhear.transcribe_summarize_clearhear
+package com.nus.clearhear
 
 import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterActivity

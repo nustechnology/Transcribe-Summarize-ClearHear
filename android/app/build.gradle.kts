@@ -13,7 +13,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.clearhear.transcribe_summarize_clearhear"
+    namespace = "com.nus.clearhear"
     compileSdk = 36
     ndkVersion = "29.0.13113456"
 
@@ -24,7 +24,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.clearhear.transcribe_summarize_clearhear"
+        applicationId = "com.nus.clearhear"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = maxOf(flutter.minSdkVersion, 24)
