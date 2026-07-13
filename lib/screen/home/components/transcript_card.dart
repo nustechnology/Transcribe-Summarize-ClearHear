@@ -151,13 +151,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     if (statusMessage.isNotEmpty && !hasTranscript) {
       return Align(
         alignment: Alignment.topCenter,
-        child: Column(
-          children: [
-            _statusText(statusMessage),
-            if (statusMessage == StringKeys.microphonePermissionDenied)
-              _statusText(StringKeys.microphonePermissionMessage),
-          ],
-        ),
+        child: _statusText(statusMessage),
       );
     }
 
