@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../lang/string_keys.dart';
+import '../../shared/widgets/app_dialog.dart';
 import '../../shared/widgets/app_titlebar.dart';
 import 'components/audio_visualizer.dart';
 import 'components/option_row.dart';
@@ -24,6 +26,7 @@ class HomeView extends StatefulWidget {
 class _HomeViewState extends State<HomeView> {
   late final HomeController controller = Get.find<HomeController>();
   Worker? _savePromptWorker;
+  Worker? _micPermissionWorker;
 
   @override
   void initState() {
@@ -40,12 +43,46 @@ class _HomeViewState extends State<HomeView> {
         unawaited(_openSaveSessionSheet());
       });
     });
+
+    _micPermissionWorker =
+        ever<bool>(controller.showMicPermissionPrompt, (show) {
+      if (!show) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !controller.showMicPermissionPrompt.value) return;
+        unawaited(_openMicPermissionDialog());
+      });
+    });
   }
 
   @override
   void dispose() {
     _savePromptWorker?.dispose();
+    _micPermissionWorker?.dispose();
     super.dispose();
+  }
+
+  Future<void> _openMicPermissionDialog() async {
+    try {
+      await showDialog<void>(
+        context: context,
+        useRootNavigator: true,
+        builder: (dialogContext) => AppDialog(
+          icon: Icons.mic_off_outlined,
+          title: StringKeys.microphonePermissionDenied.tr,
+          message: StringKeys.microphonePermissionMessage.tr,
+          secondaryLabel: StringKeys.microphonePermissionCancel.tr,
+          onSecondary: () => Navigator.of(dialogContext).pop(),
+          primaryLabel: StringKeys.microphonePermissionOpenSettings.tr,
+          onPrimary: () {
+            Navigator.of(dialogContext).pop();
+            unawaited(controller.openMicrophoneSettings());
+          },
+        ),
+      );
+    } finally {
+      controller.dismissMicPermissionPrompt();
+    }
   }
 
   Future<void> _openSaveSessionSheet() async {

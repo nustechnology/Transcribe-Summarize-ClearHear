@@ -5,6 +5,7 @@ import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../config/ml_model_config.dart';
 
@@ -41,6 +42,8 @@ class AudioRecorderService {
       rethrow;
     }
   }
+
+  Future<bool> openSystemSettings() => openAppSettings();
 
   bool get isStreaming => _isStreaming;
 
