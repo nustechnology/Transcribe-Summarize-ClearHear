@@ -72,6 +72,7 @@ class HomeController extends GetxController {
   final isAsrModelLoading = true.obs;
   final asrModelDownloadProgress = 0.0.obs;
   final showSaveSessionPrompt = false.obs;
+  final showMicPermissionPrompt = false.obs;
   final isSavingSession = false.obs;
 
   RecorderController get recorderController =>
@@ -123,6 +124,15 @@ class HomeController extends GetxController {
 
   void endSaveSheetPresentation() {
     _isSaveSheetVisible = false;
+  }
+
+  void dismissMicPermissionPrompt() {
+    showMicPermissionPrompt.value = false;
+  }
+
+  Future<void> openMicrophoneSettings() async {
+    dismissMicPermissionPrompt();
+    await _audioRecorderService.openSystemSettings();
   }
 
   Future<void> navigateToHistoryAfterSave() => _navigateToHistory();
@@ -210,7 +220,7 @@ class HomeController extends GetxController {
     try {
       final hasPermission = await _audioRecorderService.ensurePermission();
       if (!hasPermission) {
-        statusMessage.value = StringKeys.microphonePermissionDenied;
+        showMicPermissionPrompt.value = true;
         return;
       }
 
