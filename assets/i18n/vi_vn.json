@@ -17,6 +17,7 @@
   "home_processing": "Đang xử lý...",
   "home_summary_label": "TÓM TẮT",
   "microphone_permission_denied": "Cần quyền truy cập micro.",
+  "microphone_permission_message": "Vui lòng cho phép truy cập micro để bắt đầu tạo phụ đề",
   "transcription_failed": "Không thể phiên âm. Vui lòng thử lại.",
   "transcription_model_failed": "Không thể tải mô hình phiên âm.",
   "summary_failed": "Không thể tóm tắt. Vui lòng thử lại.",
