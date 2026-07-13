@@ -5,14 +5,14 @@ import 'package:flutter/foundation.dart';
 abstract final class MlModelConfig {
   static const audioSampleRate = 16000;
 
-  /// Trailing silence (seconds) before a speech segment is committed.
-  static const pauseSilenceSeconds = 1.2;
-
   /// Minimum PCM bytes before saving a conversation segment (~0.8s at 16kHz).
   static const minSegmentPcmBytes = 25600;
 
-  /// Lower threshold when flushing the final open buffer on pause/stop.
-  static const minFinishSegmentPcmBytes = 9600;
+  /// How often the in-progress utterance buffer is re-decoded for partial text.
+  static const partialRefreshIntervalMs = 400;
+
+  /// Minimum PCM bytes before attempting a partial re-decode (~0.3s at 16kHz).
+  static const minPartialPcmBytes = 9600;
 
   /// Offline segment transcription via [whisper_kit] (whisper.cpp).
   static const whisperModelName = 'tiny';
