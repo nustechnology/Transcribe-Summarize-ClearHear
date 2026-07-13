@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -9,9 +8,8 @@ import '../model/conversation_segment.dart';
 import '../util/pcm_audio_util.dart';
 import '../util/wav_util.dart';
 
-/// Buffers PCM per utterance and writes WAV files when a speech pause is detected.
+/// Writes complete utterances (as detected by VAD) to WAV files on disk.
 class ConversationSegmentCapture {
-  final BytesBuilder _current = BytesBuilder(copy: false);
   final List<ConversationSegment> _segments = [];
   int _nextId = 1;
   String? _sessionDir;
@@ -20,7 +18,6 @@ class ConversationSegmentCapture {
 
   Future<void> start() async {
     await dispose();
-    _current.clear();
     _segments.clear();
     _nextId = 1;
 
@@ -30,29 +27,17 @@ class ConversationSegmentCapture {
     await Directory(_sessionDir!).create(recursive: true);
   }
 
-  void append(Uint8List chunk) {
-    if (chunk.isEmpty) return;
-    _current.add(chunk);
-  }
-
-  /// Saves the current utterance buffer as a WAV segment.
-  Future<ConversationSegment?> commitCurrent({
-    String liveText = '',
-    bool force = false,
-  }) async {
+  /// Saves a complete utterance (VAD's `onSpeechEnd` float32 samples) as a
+  /// WAV segment.
+  Future<ConversationSegment?> commitSamples(List<double> samples) async {
     final sessionDir = _sessionDir;
-    final minBytes = force
-        ? MlModelConfig.minFinishSegmentPcmBytes
-        : MlModelConfig.minSegmentPcmBytes;
-    if (sessionDir == null || _current.length < minBytes) {
-      _current.clear();
-      return null;
-    }
+    if (sessionDir == null || samples.isEmpty) return null;
 
-    final pcm = normalizePcm16(_current.toBytes());
-    _current.clear();
+    final pcm = normalizePcm16(floatSamplesToPcm16(samples));
+    if (pcm.length < MlModelConfig.minSegmentPcmBytes) return null;
 
-    final wavPath = '$sessionDir/segment_${_nextId.toString().padLeft(3, '0')}.wav';
+    final wavPath =
+        '$sessionDir/segment_${_nextId.toString().padLeft(3, '0')}.wav';
     await File(wavPath).writeAsBytes(buildWavFromPcm16(pcm), flush: true);
 
     debugPrint(
@@ -65,16 +50,28 @@ class ConversationSegmentCapture {
       id: _nextId,
       wavPath: wavPath,
       recordedAt: DateTime.now(),
-      liveText: liveText.trim(),
     );
     _nextId++;
     _segments.add(segment);
     return segment;
   }
 
-  Future<void> dispose() async {
-    _current.clear();
+  /// Writes the still-in-progress utterance buffer to a fixed, overwritten
+  /// path so it can be re-decoded for partial text without touching the
+  /// finalized segment sequence.
+  Future<String> writePartialWav(Uint8List pcm) async {
+    final sessionDir = _sessionDir;
+    if (sessionDir == null) {
+      throw StateError('Capture session not started');
+    }
 
+    final normalized = normalizePcm16(pcm);
+    final wavPath = '$sessionDir/partial_live.wav';
+    await File(wavPath).writeAsBytes(buildWavFromPcm16(normalized), flush: true);
+    return wavPath;
+  }
+
+  Future<void> dispose() async {
     for (final segment in _segments) {
       try {
         final file = File(segment.wavPath);

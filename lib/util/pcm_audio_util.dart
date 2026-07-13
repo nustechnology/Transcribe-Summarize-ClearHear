@@ -27,6 +27,19 @@ Uint8List recorderChunkToPcm16(Uint8List chunk) {
   return out;
 }
 
+/// Converts VAD's float32 samples (range -1..1) to mono PCM16 little-endian
+/// bytes, matching the format Whisper/WAV writing expects elsewhere.
+Uint8List floatSamplesToPcm16(List<double> samples) {
+  final out = Uint8List(samples.length * 2);
+  final view = ByteData.sublistView(out);
+  for (var i = 0; i < samples.length; i++) {
+    final scaled =
+        (samples[i].clamp(-1.0, 1.0) * 32767).round().clamp(-32768, 32767);
+    view.setInt16(i * 2, scaled, Endian.little);
+  }
+  return out;
+}
+
 /// Peak-normalizes mono PCM16 so quiet mic input is usable by Whisper.
 Uint8List normalizePcm16(Uint8List pcm) {
   if (pcm.length < 2) return pcm;

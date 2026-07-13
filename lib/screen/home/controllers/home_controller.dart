@@ -55,10 +55,12 @@ class HomeController extends GetxController {
   List<ConversationSegment> _pendingSaveSegments = const [];
   bool _isSaveSheetVisible = false;
   bool _saveTranscriptsEnabled = SettingsModel.defaults().savingEnabled;
+  final Set<int> _finalizedSegmentIds = {};
 
   final isCaptioning = false.obs;
   final transcript = ''.obs;
   final transcriptSegments = <TranscriptSegmentEntry>[].obs;
+  final partialTranscript = ''.obs;
   final summary = ''.obs;
   final isProcessing = false.obs;
   final isPausing = false.obs;
@@ -83,6 +85,8 @@ class HomeController extends GetxController {
         LiveTranscriptService(
           audioRecorderService: _audioRecorderService,
           whisperKitService: _whisperKitService,
+          onPartialText: _handlePartialText,
+          onSegmentFinalized: _handleSegmentFinalized,
         );
   }
 
@@ -136,6 +140,22 @@ class HomeController extends GetxController {
   }
 
   Future<void> navigateToHistoryAfterSave() => _navigateToHistory();
+
+  void _handlePartialText(String text) {
+    partialTranscript.value = text;
+  }
+
+  void _handleSegmentFinalized(ConversationSegment segment) {
+    if (!_finalizedSegmentIds.add(segment.id)) return;
+    if (segment.displayText.isEmpty) return;
+
+    transcriptSegments.add(
+      TranscriptSegmentEntry(
+        text: segment.displayText,
+        recordedAt: segment.recordedAt,
+      ),
+    );
+  }
 
   @override
   void onInit() {
@@ -225,6 +245,8 @@ class HomeController extends GetxController {
       }
 
       _resetLiveSessionState();
+      partialTranscript.value = '';
+      _finalizedSegmentIds.clear();
       isFinishingTranscript.value = false;
       isPaused.value = false;
       isPausing.value = false;
@@ -271,6 +293,7 @@ class HomeController extends GetxController {
     isPaused.value = false;
     isPausing.value = false;
     isFinishingTranscript.value = true;
+    partialTranscript.value = '';
     _stopDurationTimer();
     _resetCaptionFontSize();
 
@@ -460,6 +483,8 @@ class HomeController extends GetxController {
     statusMessage.value = '';
     transcript.value = '';
     transcriptSegments.clear();
+    partialTranscript.value = '';
+    _finalizedSegmentIds.clear();
   }
 
   void _clearPendingSaveState() {
@@ -490,6 +515,7 @@ class HomeController extends GetxController {
 
     isPaused.value = true;
     isPausing.value = true;
+    partialTranscript.value = '';
     _stopDurationTimer();
     statusMessage.value = '';
 

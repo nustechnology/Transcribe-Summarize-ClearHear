@@ -28,6 +28,7 @@ class _TranscriptCardBody extends StatefulWidget {
 class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
   final ScrollController _scrollController = ScrollController();
   Worker? _transcriptWorker;
+  Worker? _partialWorker;
   Worker? _summaryWorker;
 
   @override
@@ -35,12 +36,15 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     super.initState();
     _transcriptWorker =
         ever(widget.controller.transcriptSegments, (_) => _scrollToBottom());
+    _partialWorker =
+        ever(widget.controller.partialTranscript, (_) => _scrollToBottom());
     _summaryWorker = ever(widget.controller.summary, (_) => _scrollToBottom());
   }
 
   @override
   void dispose() {
     _transcriptWorker?.dispose();
+    _partialWorker?.dispose();
     _summaryWorker?.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -72,6 +76,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
       final isFinishingTranscript = controller.isFinishingTranscript.value;
       final transcript = controller.transcript.value;
       final transcriptSegments = controller.transcriptSegments.toList();
+      final partialTranscript = controller.partialTranscript.value;
       final summary = controller.summary.value.trim();
       final statusMessage = controller.statusMessage.value;
       final fontSize = controller.transcriptFontSize.value;
@@ -111,6 +116,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
           isPausing: isPausing,
           transcript: transcript,
           transcriptSegments: transcriptSegments,
+          partialTranscript: partialTranscript,
           summary: summary,
           statusMessage: statusMessage,
           fontSize: fontSize,
@@ -140,6 +146,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     required bool isPausing,
     required String transcript,
     required List<TranscriptSegmentEntry> transcriptSegments,
+    required String partialTranscript,
     required String summary,
     required String statusMessage,
     required double fontSize,
@@ -168,6 +175,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
         isPausing: isPausing,
         transcript: transcript,
         transcriptSegments: transcriptSegments,
+        partialTranscript: partialTranscript,
         summary: summary,
         fontSize: fontSize,
         pausedDuration: pausedDuration,
@@ -238,6 +246,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     required bool isPausing,
     required String transcript,
     required List<TranscriptSegmentEntry> transcriptSegments,
+    required String partialTranscript,
     required String summary,
     required double fontSize,
     required String pausedDuration,
@@ -296,6 +305,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
             _TranscriptSegmentsView(
               transcript: transcript,
               transcriptSegments: transcriptSegments,
+              partialTranscript: partialTranscript,
               fontSize: fontSize,
               showProcessingTail: isFinishingTranscript,
               showListeningWhenEmpty: isCaptioning && !isPaused,
@@ -332,6 +342,7 @@ class _TranscriptSegmentsView extends StatelessWidget {
     required this.transcript,
     required this.transcriptSegments,
     required this.fontSize,
+    this.partialTranscript = '',
     this.showProcessingTail = false,
     this.showListeningWhenEmpty = false,
   });
@@ -339,6 +350,7 @@ class _TranscriptSegmentsView extends StatelessWidget {
   final String transcript;
   final List<TranscriptSegmentEntry> transcriptSegments;
   final double fontSize;
+  final String partialTranscript;
   final bool showProcessingTail;
   final bool showListeningWhenEmpty;
 
@@ -352,7 +364,9 @@ class _TranscriptSegmentsView extends StatelessWidget {
     );
     final listeningStyle = processingStyle;
 
-    if (transcriptSegments.isEmpty && !showProcessingTail) {
+    if (transcriptSegments.isEmpty &&
+        partialTranscript.isEmpty &&
+        !showProcessingTail) {
       if (transcript.trim().isNotEmpty) {
         return _SegmentTranscriptText(
           segments: [
@@ -373,6 +387,9 @@ class _TranscriptSegmentsView extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final hasLeadingContent = transcriptSegments.isNotEmpty;
+    final hasPartial = partialTranscript.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -381,8 +398,12 @@ class _TranscriptSegmentsView extends StatelessWidget {
             segments: transcriptSegments,
             fontSize: fontSize,
           ),
+        if (hasPartial) ...[
+          if (hasLeadingContent) const SizedBox(height: 12),
+          Text(partialTranscript, style: processingStyle),
+        ],
         if (showProcessingTail) ...[
-          if (transcriptSegments.isNotEmpty) ...[
+          if (hasLeadingContent || hasPartial) ...[
             const SizedBox(height: 12),
             Divider(
               height: 1,
@@ -392,7 +413,7 @@ class _TranscriptSegmentsView extends StatelessWidget {
             const SizedBox(height: 12),
           ],
           Text(StringKeys.homeProcessing.tr, style: processingStyle),
-        ] else if (transcriptSegments.isEmpty && showListeningWhenEmpty)
+        ] else if (!hasLeadingContent && !hasPartial && showListeningWhenEmpty)
           Text(StringKeys.homeListening.tr, style: listeningStyle),
       ],
     );
