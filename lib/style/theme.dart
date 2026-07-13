@@ -13,6 +13,7 @@ abstract final class AppColors {
   static const statusIdle = Color(0xFFB0B0B0);
   static const statusActive = Color(0xFF4CAF50);
   static const stopRed = Color(0xFFE66754);
+  static const errorRed = Color(0xFFE53935);
 
   static const historyBackground = Color(0xFFF7F5F2);
   static const cardSurface = Colors.white;

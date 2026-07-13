@@ -17,6 +17,7 @@
   "home_processing": "Processing...",
   "home_summary_label": "SUMMARY",
   "microphone_permission_denied": "Microphone permission is required.",
+  "microphone_permission_message": "Please allow microphone access to start captioning",
   "transcription_failed": "Could not transcribe audio. Please try again.",
   "transcription_model_failed": "Could not load transcription model.",
   "summary_failed": "Could not summarize transcript. Please try again.",

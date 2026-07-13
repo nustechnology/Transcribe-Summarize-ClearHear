@@ -22,6 +22,7 @@ abstract class StringKeys {
   static const homeProcessing = 'home_processing';
   static const homeSummaryLabel = 'home_summary_label';
   static const microphonePermissionDenied = 'microphone_permission_denied';
+  static const microphonePermissionMessage = 'microphone_permission_message';
   static const transcriptionFailed = 'transcription_failed';
   static const transcriptionModelFailed = 'transcription_model_failed';
   static const summaryFailed = 'summary_failed';

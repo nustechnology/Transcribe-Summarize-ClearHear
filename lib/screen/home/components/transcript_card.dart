@@ -120,6 +120,18 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     });
   }
 
+  Widget _statusText(String key, {double fontSize = 16}) {
+    return Text(
+      StringKeys.t(key),
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: fontSize,
+        color: AppColors.errorRed,
+        height: 1.4,
+      ),
+    );
+  }
+
   Widget _buildContent({
     required bool isCaptioning,
     required bool isPaused,
@@ -139,14 +151,12 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     if (statusMessage.isNotEmpty && !hasTranscript) {
       return Align(
         alignment: Alignment.topCenter,
-        child: Text(
-          StringKeys.t(statusMessage),
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 16,
-            color: Color(0xFFE53935),
-            height: 1.4,
-          ),
+        child: Column(
+          children: [
+            _statusText(statusMessage),
+            if (statusMessage == StringKeys.microphonePermissionDenied)
+              _statusText(StringKeys.microphonePermissionMessage),
+          ],
         ),
       );
     }
@@ -173,15 +183,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              StringKeys.t(statusMessage),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFFE53935),
-                height: 1.4,
-              ),
-            ),
+            _statusText(statusMessage, fontSize: 14),
             const SizedBox(height: 12),
             Expanded(child: transcriptBody),
           ],
