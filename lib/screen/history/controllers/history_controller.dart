@@ -164,8 +164,8 @@ class HistoryController extends GetxController {
       final deletedCount = await _historyRepository.deleteSessions([id]);
 
       if (deletedCount > 0) {
-        AppToast.sessionDeleted(
-          title: StringKeys.historyDeleteSuccess.trParams({
+        AppToast.success(
+          StringKeys.historyDeleteSuccess.trParams({
             'count': '1',
           }),
           subtitle: StringKeys.historyDeleteRemovedNote.tr,
@@ -214,8 +214,8 @@ class HistoryController extends GetxController {
         } else {
           await refreshHistory();
         }
-        AppToast.sessionDeleted(
-          title: StringKeys.historyDeleteSuccess.trParams({
+        AppToast.success(
+          StringKeys.historyDeleteSuccess.trParams({
             'count': '$deletedCount',
           }),
           subtitle: StringKeys.historyDeleteRemovedNote.tr,
