@@ -103,6 +103,7 @@ class LiveTranscriptService {
       await _vad.startListening(
         audioStream: pcmStreamController.stream,
         submitUserSpeechOnPause: true,
+        baseAssetPath: MlModelConfig.vadModelAssetBasePath,
       );
       await _audioRecorderService.startStreaming(
         onChunk: (chunk) => _handleChunk(chunk),
@@ -175,6 +176,7 @@ class LiveTranscriptService {
       await _vad.startListening(
         audioStream: _pcmStreamController?.stream,
         submitUserSpeechOnPause: true,
+        baseAssetPath: MlModelConfig.vadModelAssetBasePath,
       );
       await _audioRecorderService.startStreaming(
         onChunk: (chunk) => _handleChunk(chunk),
