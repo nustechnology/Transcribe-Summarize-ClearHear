@@ -27,6 +27,8 @@ class TranscriptMessageItem extends StatelessWidget {
                 textAlign: TextAlign.right,
                 style: const TextStyle(
                   fontSize: 13,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -50,6 +52,8 @@ class TranscriptMessageItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 15,
                     height: 1.45,
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
