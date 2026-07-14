@@ -453,8 +453,8 @@ class HomeController extends GetxController {
       _captioningStartedAt = null;
       captioningElapsed.value = Duration.zero;
 
-      AppToast.sessionSaved(
-        title: StringKeys.homeSaveSessionSuccess.tr,
+      AppToast.success(
+        StringKeys.homeSaveSessionSuccess.tr,
         subtitle: StringKeys.homeSaveSessionStoredNote.tr,
       );
 

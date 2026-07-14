@@ -8,48 +8,64 @@ import 'package:transcribe_summarize_clearhear/style/theme.dart';
 class AppToast {
   static OverlayEntry? _activeBanner;
 
-  static void success(String message) {
-    _showToast(message, AppColors.primary);
+  static void success(String message, {String? subtitle}) {
+    _showSessionActionBanner(
+      title: message,
+      subtitle: subtitle,
+      titleColor: AppColors.primary,
+    );
   }
 
-  static void error(String message) {
-    _showToast(message, Colors.red);
+  static void error(String message, {String? subtitle}) {
+    _showSessionActionBanner(
+      title: message,
+      subtitle: subtitle,
+      icon: Icons.error_outline,
+      iconColor: Colors.red,
+      iconBackgroundColor: const Color(0xFFFDECEA),
+      titleColor: Colors.red,
+    );
   }
 
-  static void warning(String message) {
-    _showToast(message, Colors.orange);
+  static void warning(String message, {String? subtitle}) {
+    _showSessionActionBanner(
+      title: message,
+      subtitle: subtitle,
+      icon: Icons.warning_amber_rounded,
+      iconColor: Colors.orange,
+      iconBackgroundColor: const Color(0xFFFFF4E5),
+      titleColor: Colors.orange,
+    );
   }
 
-  static void info(String message) {
-    _showToast(message, Colors.blue);
-  }
-
-  static void sessionSaved({
-    required String title,
-    String? subtitle,
-  }) {
-    _showSessionActionBanner(title: title, subtitle: subtitle);
-  }
-
-  static void sessionDeleted({
-    required String title,
-    String? subtitle,
-  }) {
-    _showSessionActionBanner(title: title, subtitle: subtitle);
+  static void info(String message, {String? subtitle}) {
+    _showSessionActionBanner(
+      title: message,
+      subtitle: subtitle,
+      icon: Icons.info_outline,
+      iconColor: Colors.blue,
+      iconBackgroundColor: const Color(0xFFE8F1FC),
+      titleColor: Colors.blue,
+    );
   }
 
   static void _showSessionActionBanner({
     required String title,
     String? subtitle,
+    IconData icon = Icons.check_rounded,
+    Color iconColor = AppColors.primary,
+    Color iconBackgroundColor = const Color(0xFFE3F0F0),
+    Color titleColor = AppColors.primary,
   }) {
     final cleanedSubtitle =
         subtitle?.replaceFirst(RegExp(r'^\s*-\s*'), '').trim();
 
     _showBannerToast(
-      icon: Icons.check_rounded,
-      iconColor: AppColors.primary,
-      iconBackgroundColor: const Color(0xFFE3F0F0),
+      icon: icon,
+      iconColor: iconColor,
+      iconBackgroundColor: iconBackgroundColor,
       title: title,
+      titleColor: titleColor,
       subtitle: cleanedSubtitle?.isNotEmpty == true ? cleanedSubtitle : null,
     );
   }
@@ -71,13 +87,17 @@ class AppToast {
     required Color iconColor,
     required Color iconBackgroundColor,
     required String title,
+    required Color titleColor,
     String? subtitle,
     Duration duration = const Duration(seconds: 3),
   }) {
     void show() {
       final overlay = _resolveOverlay();
       if (overlay == null) {
-        success(subtitle == null ? title : '$title\n$subtitle');
+        _showToast(
+          subtitle == null ? title : '$title\n$subtitle',
+          iconColor,
+        );
         return;
       }
 
@@ -90,6 +110,7 @@ class AppToast {
           iconColor: iconColor,
           iconBackgroundColor: iconBackgroundColor,
           title: title,
+          titleColor: titleColor,
           subtitle: subtitle,
           duration: duration,
           onDismissed: () {
@@ -138,6 +159,7 @@ class _AppToastBanner extends StatefulWidget {
     required this.title,
     required this.duration,
     required this.onDismissed,
+    required this.titleColor,
     this.subtitle,
   });
 
@@ -145,6 +167,7 @@ class _AppToastBanner extends StatefulWidget {
   final Color iconColor;
   final Color iconBackgroundColor;
   final String title;
+  final Color titleColor;
   final String? subtitle;
   final Duration duration;
   final VoidCallback onDismissed;
@@ -255,10 +278,10 @@ class _AppToastBannerState extends State<_AppToastBanner>
                         children: [
                           Text(
                             widget.title,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
+                              color: widget.titleColor,
                               height: 1.2,
                             ),
                           ),
