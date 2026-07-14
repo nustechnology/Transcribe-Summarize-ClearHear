@@ -27,6 +27,7 @@ class _HomeViewState extends State<HomeView> {
   late final HomeController controller = Get.find<HomeController>();
   Worker? _savePromptWorker;
   Worker? _micPermissionWorker;
+  Worker? _transcriptFinishErrorWorker;
 
   @override
   void initState() {
@@ -53,12 +54,25 @@ class _HomeViewState extends State<HomeView> {
         unawaited(_openMicPermissionDialog());
       });
     });
+
+    _transcriptFinishErrorWorker =
+        ever<bool>(controller.showTranscriptFinishErrorPrompt, (show) {
+      if (!show) return;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !controller.showTranscriptFinishErrorPrompt.value) {
+          return;
+        }
+        unawaited(_openTranscriptFinishErrorDialog());
+      });
+    });
   }
 
   @override
   void dispose() {
     _savePromptWorker?.dispose();
     _micPermissionWorker?.dispose();
+    _transcriptFinishErrorWorker?.dispose();
     super.dispose();
   }
 
@@ -82,6 +96,65 @@ class _HomeViewState extends State<HomeView> {
       );
     } finally {
       controller.dismissMicPermissionPrompt();
+    }
+  }
+
+  Future<void> _openTranscriptFinishErrorDialog() async {
+    final error = controller.transcriptFinishError.value;
+    if (error == null) {
+      controller.dismissTranscriptFinishErrorPrompt();
+      return;
+    }
+
+    final title = switch (error) {
+      TranscriptFinishError.tooShort =>
+        StringKeys.homeTranscriptTooShortTitle.tr,
+      TranscriptFinishError.unrecognized =>
+        StringKeys.homeTranscriptUnrecognizedTitle.tr,
+      TranscriptFinishError.failed => StringKeys.homeTranscriptFailedTitle.tr,
+    };
+    
+    final message = switch (error) {
+      TranscriptFinishError.tooShort =>
+        StringKeys.homeTranscriptTooShortMessage.tr,
+      TranscriptFinishError.unrecognized =>
+        StringKeys.homeTranscriptUnrecognizedMessage.tr,
+      TranscriptFinishError.failed => StringKeys.transcriptionFailed.tr,
+    };
+
+    try {
+      await showDialog<void>(
+        context: context,
+        useRootNavigator: true,
+        builder: (dialogContext) {
+          if (error == TranscriptFinishError.tooShort) {
+            return AppDialog(
+              icon: Icons.timer_off_outlined,
+              title: title,
+              message: message,
+              primaryLabel: StringKeys.commonOk.tr,
+              onPrimary: () => Navigator.of(dialogContext).pop(),
+            );
+          }
+
+          return AppDialog(
+            icon: error == TranscriptFinishError.failed
+                ? Icons.error_outline
+                : Icons.voice_over_off_outlined,
+            title: title,
+            message: message,
+            secondaryLabel: StringKeys.commonOk.tr,
+            onSecondary: () => Navigator.of(dialogContext).pop(),
+            primaryLabel: StringKeys.commonRetry.tr,
+            onPrimary: () {
+              Navigator.of(dialogContext).pop();
+              unawaited(controller.retryCaptioningAfterFinishError());
+            },
+          );
+        },
+      );
+    } finally {
+      controller.dismissTranscriptFinishErrorPrompt();
     }
   }
 

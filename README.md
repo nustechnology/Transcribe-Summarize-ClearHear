@@ -62,6 +62,32 @@ git lfs pull
 ls -lh assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf   # should be ~469 MB
 ```
 
+## Build
+
+Bump app version in `pubspec.yaml` (`version: x.y.z+build`) before release. The Settings screen reads that value.
+
+**Android APK**
+
+```bash
+fvm flutter build apk --release
+```
+
+Output: `build/app/outputs/flutter-apk/app-release.apk`
+
+Split per ABI (smaller downloads):
+
+```bash
+fvm flutter build apk --release --split-per-abi
+```
+
+**iOS IPA** (macOS + Xcode signing required)
+
+```bash
+fvm flutter build ipa --release
+```
+
+Output: `build/ios/ipa/*.ipa`
+
 ## Captioning flow
 
 1. **Start** — mic streams PCM; segments save as WAV when silence is detected.
