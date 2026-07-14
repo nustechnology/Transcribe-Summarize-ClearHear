@@ -51,6 +51,7 @@ class SessionTitle extends StatelessWidget {
                 textStyle: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
+                  color: AppColors.title,
                 ),
                 inputStyle: const TextStyle(
                   fontSize: 24,
@@ -89,8 +90,8 @@ class _MetaText extends StatelessWidget {
       text,
       style: const TextStyle(
         fontSize: 14,
-        color: AppColors.gray,
-        fontWeight: FontWeight.w400,
+        color: AppColors.textSecondary,
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -106,7 +107,7 @@ class _Dot extends StatelessWidget {
       child: Text(
         "•",
         style: TextStyle(
-          color: AppColors.gray,
+          color: AppColors.textSecondary,
           fontSize: 14,
         ),
       ),

@@ -5,8 +5,8 @@ abstract final class AppColors {
   static const primary = Color(0xFF1C5B5B);
   static const surface = Colors.white;
   static const textPrimary = Color(0xFF1A1A1A);
-  static const textSecondary = Color(0xFF757575);
-  static const textMuted = Color(0xFF9E9E9E);
+  static const textSecondary = Color(0xFF5F6368);
+  static const textMuted = Color(0xFF7A7A7A);
   static const border = Color(0xFFE0E0E0);
   static const confidenceBlue = Color(0xFF1976D2);
   static const privacyBg = Color(0xFFE3F2FD);
@@ -26,8 +26,8 @@ abstract final class AppColors {
 
   static const cardBackground = Colors.white;
   static const title = Color(0xFF1A1A1A);
-  static const body = Color(0xFF545454);
-  static const muted = Color(0xFF7A7A7A);
+  static const body = Color(0xFF3F3F46);
+  static const muted = Color(0xFF6B7280);
   static const accent = Color(0xFF1C5B5B);
 
   static const Color gray = Color(0xFF6B7280);
@@ -40,7 +40,7 @@ abstract final class AppColors {
   static const summaryBorder = Color(0xFFE5E7EB);
 
   // Text
-  static const textDivider = Color(0xFF9CA3AF);
+  static const textDivider = Color(0xFF6B7280);
 
   // Private Badge
   static const privateBackground = Color(0xFFE8F7F3);
