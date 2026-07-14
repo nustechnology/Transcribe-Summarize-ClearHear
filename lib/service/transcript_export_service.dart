@@ -22,7 +22,8 @@ class TranscriptExportService {
     int pageSize = defaultPageSize,
   }) async {
     final directory = await _exportDirectory();
-    final file = File(p.join(directory.path, _fileName(session)));
+    final file = await _resolveExportFile(directory, session);
+    await _writeSessionMetadata(file, session);
     await _cleanupStaleExports(directory, keepFile: file);
     final sink = file.openWrite();
 
@@ -73,6 +74,57 @@ class TranscriptExportService {
     return directory;
   }
 
+  Future<File> _resolveExportFile(
+      Directory directory, SessionModel session) async {
+    final baseName = _fileName(session);
+    final baseFile = File(p.join(directory.path, baseName));
+
+    if (!await baseFile.exists()) {
+      return baseFile;
+    }
+
+    final metadataFile = File('${baseFile.path}.meta');
+    final existingSessionId = await _readSessionMetadata(metadataFile);
+    final currentSessionId = session.id?.toString();
+
+    if (currentSessionId != null && existingSessionId == currentSessionId) {
+      return baseFile;
+    }
+
+    final timestamp = DateFormat('HHmmss').format(DateTime.now());
+    final extension = p.extension(baseName);
+    final stem = p.basenameWithoutExtension(baseName);
+    var suffix = 1;
+    var candidate =
+        File(p.join(directory.path, '${stem}_$timestamp$extension'));
+
+    while (await candidate.exists()) {
+      candidate = File(
+        p.join(directory.path, '${stem}_${timestamp}_$suffix$extension'),
+      );
+      suffix += 1;
+    }
+
+    return candidate;
+  }
+
+  Future<void> _writeSessionMetadata(File file, SessionModel session) async {
+    final metadataFile = File('${file.path}.meta');
+    await metadataFile.writeAsString(session.id?.toString() ?? 'unknown');
+  }
+
+  Future<String?> _readSessionMetadata(File metadataFile) async {
+    if (!await metadataFile.exists()) {
+      return null;
+    }
+
+    try {
+      return (await metadataFile.readAsString()).trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _cleanupStaleExports(
     Directory directory, {
     required File keepFile,
@@ -104,7 +156,7 @@ class TranscriptExportService {
     final startedAt = DateTime.fromMillisecondsSinceEpoch(
       session.startedAt * 1000,
     );
-    final date = DateFormat('yyyy-MM-dd_HH-mm').format(startedAt);
+    final date = DateFormat('yyyy-MM-dd').format(startedAt);
     final title = _sanitizeFileName(session.title);
     return '${title}_$date.txt';
   }

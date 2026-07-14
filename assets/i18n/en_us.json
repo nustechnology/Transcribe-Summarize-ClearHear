@@ -63,7 +63,7 @@
   "history_delete_confirm_message": "Are you sure you want to permanently delete the selected session(s)?",
   "history_delete_confirm_action": "Delete",
   "history_delete_success": "Deleted @count sessions",
-  "history_delete_removed_note": "- removed from this device",
+  "history_delete_removed_note": "- Removed from this device",
   "history_detail_share": "Share text",
   "history_detail_delete": "Delete",
   "commonRetry": "Retry",

@@ -191,6 +191,7 @@ class _HomeViewState extends State<HomeView> {
       );
 
       if (savedSession) {
+        await Future.delayed(const Duration(milliseconds: 300));
         await controller.navigateToHistoryAfterSave();
       }
     } finally {
