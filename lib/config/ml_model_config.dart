@@ -48,4 +48,8 @@ abstract final class MlModelConfig {
 
   /// Reserved for system instructions + chat template outside the transcript.
   static const summaryPromptOverheadTokens = 220;
+
+  /// Silero VAD (v4/legacy) ONNX model, bundled so voice activity detection
+  /// works fully offline instead of fetching it from the `vad` package's CDN.
+  static const vadModelAssetBasePath = 'assets/models/';
 }
