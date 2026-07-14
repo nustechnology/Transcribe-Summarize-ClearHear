@@ -138,7 +138,7 @@ class SettingsController extends GetxController {
         await Get.find<HistoryController>().loadHistory();
       }
 
-      AppToast.sessionDeleted(title: StringKeys.settingsClearDataSuccess.tr);
+      AppToast.success(StringKeys.settingsClearDataSuccess.tr);
     } catch (e) {
       AppLogger.error(error: e);
       AppToast.error(StringKeys.somethingWentWrong.tr);

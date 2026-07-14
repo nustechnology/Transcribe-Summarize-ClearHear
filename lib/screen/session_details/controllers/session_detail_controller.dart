@@ -241,8 +241,8 @@ class SessionDetailController extends GetxController {
         }
 
         Get.rootDelegate.popRoute();
-        AppToast.sessionDeleted(
-          title: StringKeys.historyDetailDeleteSuccess.tr,
+        AppToast.success(
+          StringKeys.historyDetailDeleteSuccess.tr,
           subtitle: StringKeys.historyDeleteRemovedNote.tr,
         );
       } else {
