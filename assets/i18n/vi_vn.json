@@ -63,7 +63,7 @@
   "history_delete_confirm_message": "Bạn có chắc chắn muốn xóa vĩnh viễn (các) bản ghi đã chọn không?",
   "history_delete_confirm_action": "Xóa",
   "history_delete_success": "Đã xóa @count bản ghi",
-  "history_delete_removed_note": "- đã xóa khỏi thiết bị này",
+  "history_delete_removed_note": "- Đã xóa khỏi thiết bị này",
   "history_detail_share": "Chia sẻ",
   "history_detail_delete": "Xóa",
   "commonRetry": "Thử lại",

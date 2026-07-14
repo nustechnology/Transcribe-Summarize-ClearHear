@@ -36,16 +36,16 @@ class SessionDetailView extends GetView<SessionDetailController> {
               child: GestureDetector(
                 onTap:
                     isTitleEditing ? null : () => Get.rootDelegate.popRoute(),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.arrow_back_ios,
                       color: AppColors.primary,
                       size: 20.0,
                     ),
                     Text(
-                      'History',
-                      style: TextStyle(
+                      StringKeys.navHistory.tr,
+                      style: const TextStyle(
                         fontSize: 20.0,
                         fontWeight: FontWeight.w600,
                         color: AppColors.primary,
@@ -57,9 +57,10 @@ class SessionDetailView extends GetView<SessionDetailController> {
             ),
           ),
           body: SafeArea(
-            child: controller.isLoading.value && controller.session.value == null
-                ? _buildLoadingSkeleton()
-                : _buildContent(context),
+            child:
+                controller.isLoading.value && controller.session.value == null
+                    ? _buildLoadingSkeleton()
+                    : _buildContent(context),
           ),
         ),
       );
@@ -129,7 +130,6 @@ class SessionDetailView extends GetView<SessionDetailController> {
     final session = controller.session.value;
     final errorMessage = controller.errorMessage.value;
     final isTitleEditing = controller.isTitleEditing.value;
-
 
     if (errorMessage.isNotEmpty || session == null) {
       return EmptyState(

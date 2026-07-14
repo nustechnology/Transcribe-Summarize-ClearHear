@@ -90,7 +90,6 @@ class HistoryCard extends GetView<HistoryController> {
                                     controller.updateTitle(item.id, newTitle),
                                 onTapSelectionMode: () =>
                                     controller.toggleItemSelection(item.id),
-                                onTap: () => controller.openDetail(item.id),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -190,8 +189,7 @@ class HistoryBadge extends StatelessWidget {
         );
       default:
         return _BadgeStyle(
-          backgroundColor:
-              AppColors.historyBadgeMeeting.withValues(alpha: 0.6),
+          backgroundColor: AppColors.historyBadgeMeeting.withValues(alpha: 0.6),
           icon: Icons.people_alt,
           iconColor: AppColors.accent,
         );

@@ -32,8 +32,6 @@ class HistoryFooterNote extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_ios,
-                size: 14, color: AppColors.muted),
           ],
         ),
       ),

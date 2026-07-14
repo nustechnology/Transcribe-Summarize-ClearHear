@@ -65,9 +65,9 @@ class HistoryTitleBar extends GetView<HistoryController> {
                 : null,
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.delete_outline_outlined,
-                  color: canDelete ? AppColors.title : AppColors.muted,
+                  color: AppColors.errorRed,
                 ),
                 const SizedBox(
                   width: 4.0,
@@ -78,7 +78,8 @@ class HistoryTitleBar extends GetView<HistoryController> {
                   }),
                   style: const TextStyle(
                     fontSize: 14,
-                    color: AppColors.title,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.errorRed,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
