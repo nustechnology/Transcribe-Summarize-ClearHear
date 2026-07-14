@@ -75,6 +75,8 @@ class HomeController extends GetxController {
   final asrModelDownloadProgress = 0.0.obs;
   final showSaveSessionPrompt = false.obs;
   final showMicPermissionPrompt = false.obs;
+  final showTranscriptFinishErrorPrompt = false.obs;
+  final transcriptFinishError = Rxn<TranscriptFinishError>();
   final isSavingSession = false.obs;
 
   RecorderController get recorderController =>
@@ -132,6 +134,16 @@ class HomeController extends GetxController {
 
   void dismissMicPermissionPrompt() {
     showMicPermissionPrompt.value = false;
+  }
+
+  void dismissTranscriptFinishErrorPrompt() {
+    showTranscriptFinishErrorPrompt.value = false;
+    transcriptFinishError.value = null;
+  }
+
+  Future<void> retryCaptioningAfterFinishError() async {
+    dismissTranscriptFinishErrorPrompt();
+    await startCaptioning();
   }
 
   Future<void> openMicrophoneSettings() async {
@@ -285,14 +297,14 @@ class HomeController extends GetxController {
   }
 
   Future<void> stopCaptioning() async {
-    if (!isCaptioning.value) return;
+    if (!isCaptioning.value || isFinishingTranscript.value) return;
 
+    isFinishingTranscript.value = true;
     isCaptioning.value = false;
     summary.value = '';
     statusMessage.value = '';
     isPaused.value = false;
     isPausing.value = false;
-    isFinishingTranscript.value = true;
     partialTranscript.value = '';
     _stopDurationTimer();
     _resetCaptionFontSize();
@@ -347,8 +359,11 @@ class HomeController extends GetxController {
       final hasVisibleTranscript =
           transcriptSegments.isNotEmpty || result.text.trim().isNotEmpty;
       if (!hasVisibleTranscript) {
-        statusMessage.value = StringKeys.transcriptionFailed;
-        _clearPendingSaveState();
+        _promptTranscriptFinishError(
+          result.segments.isEmpty
+              ? TranscriptFinishError.tooShort
+              : TranscriptFinishError.unrecognized,
+        );
       } else if (await _isTranscriptSavingEnabled()) {
         showSaveSessionPrompt.value = true;
       } else {
@@ -357,12 +372,20 @@ class HomeController extends GetxController {
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Stop failed: $error');
       debugPrint('$stackTrace');
-      statusMessage.value = StringKeys.transcriptionFailed;
-      _clearPendingSaveState();
+      _promptTranscriptFinishError(TranscriptFinishError.failed);
     } finally {
       isFinishingTranscript.value = false;
       await liveTranscript.dispose();
     }
+  }
+
+  void _promptTranscriptFinishError(TranscriptFinishError error) {
+    _clearPendingSaveState();
+    _resetLiveSessionState();
+    _captioningStartedAt = null;
+    captioningElapsed.value = Duration.zero;
+    transcriptFinishError.value = error;
+    showTranscriptFinishErrorPrompt.value = true;
   }
 
   void discardPendingSession() {
@@ -657,4 +680,10 @@ class HomeController extends GetxController {
     await _audioRecorderService.dispose();
     await _whisperKitService.dispose();
   }
+}
+
+enum TranscriptFinishError {
+  tooShort,
+  unrecognized,
+  failed,
 }
