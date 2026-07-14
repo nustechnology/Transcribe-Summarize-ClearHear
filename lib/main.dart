@@ -6,6 +6,7 @@ import 'package:transcribe_summarize_clearhear/service/database_service.dart';
 import 'arch/route/app_route.dart';
 import 'lang/string_keys.dart';
 import 'lang/translation.dart';
+import 'shared/app_version.dart';
 import 'util/debug_seed.dart';
 import 'util/mock_history_data.dart';
 import 'screen/main/bindings/main_binding.dart';
@@ -13,7 +14,10 @@ import 'style/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Translation.load();
+  await Future.wait([
+    Translation.load(),
+    AppVersion.init(),
+  ]);
   Get.put(DatabaseService(), permanent: true);
 
   if (kDebugMode && MockHistoryData.enabled) {

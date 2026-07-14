@@ -15,6 +15,22 @@ class PrimaryActionButton extends GetView<HomeController> {
       final isProcessing = controller.isProcessing.value;
       final isPaused = controller.isPaused.value;
       final isPausing = controller.isPausing.value;
+      final isFinishingTranscript = controller.isFinishingTranscript.value;
+
+      if (isFinishingTranscript) {
+        return const Opacity(
+          opacity: 0.45,
+          child: _ActionButton(
+            labelKey: StringKeys.homeStopCaptioning,
+            icon: Icons.stop_rounded,
+            filled: true,
+            backgroundColor: AppColors.stopRed,
+            foregroundColor: Colors.white,
+            isLoading: true,
+            onPressed: null,
+          ),
+        );
+      }
 
       if (isCaptioning) {
         if (isPaused) {
@@ -39,7 +55,7 @@ class PrimaryActionButton extends GetView<HomeController> {
                   backgroundColor: Colors.white,
                   foregroundColor: AppColors.stopRed,
                   borderColor: AppColors.stopRed,
-                  onPressed: isProcessing || isPausing || controller.isFinishingTranscript.value
+                  onPressed: isProcessing || isPausing
                       ? null
                       : controller.stopCaptioning,
                 ),
@@ -57,7 +73,7 @@ class PrimaryActionButton extends GetView<HomeController> {
                 filled: true,
                 backgroundColor: AppColors.stopRed,
                 foregroundColor: Colors.white,
-                onPressed: isProcessing || isPausing || controller.isFinishingTranscript.value
+                onPressed: isProcessing || isPausing
                     ? null
                     : controller.stopCaptioning,
               ),
@@ -108,6 +124,7 @@ class _ActionButton extends StatelessWidget {
     this.borderColor,
     this.compact = false,
     this.loadingDots = false,
+    this.isLoading = false,
   });
 
   final String labelKey;
@@ -120,6 +137,7 @@ class _ActionButton extends StatelessWidget {
   final Color? borderColor;
   final bool compact;
   final bool loadingDots;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -151,7 +169,17 @@ class _ActionButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: iconSize, color: fgColor),
+              if (isLoading)
+                SizedBox(
+                  width: iconSize,
+                  height: iconSize,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: fgColor,
+                  ),
+                )
+              else
+                Icon(icon, size: iconSize, color: fgColor),
               SizedBox(width: iconGap),
               Text(
                 labelText ?? labelKey.tr,

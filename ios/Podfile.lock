@@ -4,6 +4,14 @@ PODS:
   - Flutter (1.0.0)
   - flutter_llama (1.0.0):
     - Flutter
+  - onnxruntime-c (1.22.0)
+  - onnxruntime-objc (1.22.0):
+    - onnxruntime-objc/Core (= 1.22.0)
+  - onnxruntime-objc/Core (1.22.0):
+    - onnxruntime-c (= 1.22.0)
+  - vad (0.0.6):
+    - Flutter
+    - onnxruntime-objc (= 1.22.0)
   - whisper_kit (0.0.1):
     - Flutter
     - whisper_kit/EnhancedAudio (= 0.0.1)
@@ -14,7 +22,13 @@ DEPENDENCIES:
   - audio_waveforms (from `.symlinks/plugins/audio_waveforms/ios`)
   - Flutter (from `Flutter`)
   - flutter_llama (from `.symlinks/plugins/flutter_llama/ios`)
+  - vad (from `.symlinks/plugins/vad/ios`)
   - whisper_kit (from `.symlinks/plugins/whisper_kit/ios`)
+
+SPEC REPOS:
+  trunk:
+    - onnxruntime-c
+    - onnxruntime-objc
 
 EXTERNAL SOURCES:
   audio_waveforms:
@@ -23,6 +37,8 @@ EXTERNAL SOURCES:
     :path: Flutter
   flutter_llama:
     :path: ".symlinks/plugins/flutter_llama/ios"
+  vad:
+    :path: ".symlinks/plugins/vad/ios"
   whisper_kit:
     :path: ".symlinks/plugins/whisper_kit/ios"
 
@@ -30,6 +46,9 @@ SPEC CHECKSUMS:
   audio_waveforms: a6dde7fe7c0ea05f06ffbdb0f7c1b2b2ba6cedcf
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_llama: 6e228198f708bc58cf75eabc96f0c5d0eedaced7
+  onnxruntime-c: 7f778680e96145956c0a31945f260321eed2611a
+  onnxruntime-objc: 83d28b87525bd971259a66e153ea32b5d023de19
+  vad: 7934867589afe53567f492df66fb1615f2185822
   whisper_kit: a3d6076cab694aa0ed1f813fd663ef4099ca0af9
 
 PODFILE CHECKSUM: 4186260aa218c7e1f90232f65c0066bbcf7597dc

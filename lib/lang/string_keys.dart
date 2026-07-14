@@ -28,6 +28,15 @@ abstract class StringKeys {
       'microphone_permission_open_settings';
   static const transcriptionFailed = 'transcription_failed';
   static const transcriptionModelFailed = 'transcription_model_failed';
+  static const homeTranscriptTooShortTitle = 'home_transcript_too_short_title';
+  static const homeTranscriptTooShortMessage =
+      'home_transcript_too_short_message';
+  static const homeTranscriptUnrecognizedTitle =
+      'home_transcript_unrecognized_title';
+  static const homeTranscriptUnrecognizedMessage =
+      'home_transcript_unrecognized_message';
+  static const homeTranscriptFailedTitle = 'home_transcript_failed_title';
+  static const commonOk = 'common_ok';
   static const summaryFailed = 'summary_failed';
   static const summaryModelFailed = 'summary_model_failed';
   static const recorderUnavailable = 'recorder_unavailable';

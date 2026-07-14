@@ -182,9 +182,9 @@ class SettingsView extends GetView<SettingsController> {
                           color: AppColors.primary,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text(
+                        child: Text(
                           AppVersion.version,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: AppColors.cardBackground,
