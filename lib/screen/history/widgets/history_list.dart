@@ -87,7 +87,32 @@ class HistoryList extends GetView<HistoryController> {
                   child: const Icon(Icons.delete_outline, color: Colors.white),
                 ),
                 confirmDismiss: (_) async {
-                  return await controller.deleteItem(item.id);
+                  final confirmed = await Get.dialog<bool>(
+                    AlertDialog(
+                      title: Text(StringKeys.historyDeleteConfirmTitle
+                          .trParams({'count': '1'})),
+                      content: Text(StringKeys.historyDeleteConfirmMessage.tr),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Get.back(result: false),
+                          child: Text(StringKeys.historyCancel.tr),
+                        ),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.stopRed),
+                          onPressed: () => Get.back(result: true),
+                          child:
+                              Text(StringKeys.historyDeleteConfirmAction.tr),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true) {
+                    return await controller.deleteItem(item.id);
+                  }
+
+                  return false;
                 },
                 onDismissed: (_) {
                   controller.removeItem(item.id);

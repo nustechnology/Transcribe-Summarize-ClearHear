@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/shared/widgets/app_titlebar.dart';
-
-import '../../style/theme.dart';
+import 'package:transcribe_summarize_clearhear/style/theme.dart';
 import 'controllers/history_controller.dart';
 import 'widgets/history_footer_note.dart';
 import 'widgets/history_header.dart';
@@ -22,26 +21,30 @@ class HistoryView extends GetView<HistoryController> {
             controller.cancelSelection();
           }
         },
-        child: const Scaffold(
+        child: Scaffold(
           backgroundColor: AppColors.surface,
-          body: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
-                children: [
-                  SizedBox(height: 12),
-                  AppTitleBar(
-                    showActionIcon: false,
-                  ),
-                  HistoryTitleBar(),
-                  SizedBox(height: 16),
-                  HistorySearchField(),
-                  SizedBox(height: 16),
-                  Expanded(child: HistoryList()),
-                  SizedBox(height: 12),
-                  HistoryFooterNote(),
-                  SizedBox(height: 16),
-                ],
+          body: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: const SafeArea(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20.0),
+                child: Column(
+                  children: [
+                    SizedBox(height: 12),
+                    AppTitleBar(
+                      showActionIcon: false,
+                    ),
+                    HistoryTitleBar(),
+                    SizedBox(height: 16),
+                    HistorySearchField(),
+                    SizedBox(height: 16),
+                    Expanded(child: HistoryList()),
+                    SizedBox(height: 12),
+                    HistoryFooterNote(),
+                    SizedBox(height: 16),
+                  ],
+                ),
               ),
             ),
           ),
