@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -30,6 +31,8 @@ class LlamaService {
   LlamaService({FlutterLlama? llama}) : _llama = llama ?? FlutterLlama.instance;
 
   final FlutterLlama _llama;
+  static const MethodChannel _llamaChannel = MethodChannel('flutter_llama');
+  static const EventChannel _llamaEventChannel = EventChannel('flutter_llama/stream');
   static const MethodChannel _assetChannel =
       MethodChannel('clearhear/model_assets');
 
@@ -211,21 +214,19 @@ class LlamaService {
   }
 
   /// Summarize [transcript] into plain text with no markdown.
+  ///
+  /// Uses [generateStream] instead of [generate] because flutter_llama's
+  /// blocking JNI path constructs `GenerationResult` from native code, and
+  /// R8 strips that constructor in Flutter release builds.
   Future<String> summarize(String transcript) async {
     try {
       _ensureModelLoaded();
 
-      final response = await _llama.generate(
-        GenerationParams(
-          prompt: buildBoundedSummaryPrompt(transcript),
-          maxTokens: MlModelConfig.summaryMaxTokens,
-          temperature: 0.2,
-          topP: 0.9,
-          topK: 40,
-          repeatPenalty: 1.1,
-        ),
-      );
-      return _sanitizeOutput(response.text);
+      final buffer = StringBuffer();
+      await for (final token in summarizeStream(transcript)) {
+        buffer.write(token);
+      }
+      return _sanitizeOutput(buffer.toString());
     } catch (error, stackTrace) {
       AppLogger.error(
         error: error,
@@ -241,7 +242,17 @@ class LlamaService {
     try {
       _ensureModelLoaded();
 
-      yield* _llama.generateStream(
+      final controller = StreamController<String>();
+      final subscription = _llamaEventChannel.receiveBroadcastStream().listen(
+        (dynamic token) {
+          if (token is String && token.isNotEmpty) {
+            controller.add(token);
+          }
+        },
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+      final invokeFuture = _invokeStreamGeneration(
         GenerationParams(
           prompt: buildBoundedSummaryPrompt(transcript),
           maxTokens: MlModelConfig.summaryMaxTokens,
@@ -249,8 +260,21 @@ class LlamaService {
           topP: 0.9,
           topK: 40,
           repeatPenalty: 1.1,
-        ),
-      );
+        ).toMap(),
+      ).catchError((Object error, StackTrace stackTrace) {
+        if (!controller.isClosed) {
+          controller.addError(error, stackTrace);
+          controller.close();
+        }
+      });
+
+      try {
+        yield* controller.stream;
+        await invokeFuture;
+      } finally {
+        await subscription.cancel();
+        await controller.close();
+      }
     } catch (error, stackTrace) {
       AppLogger.error(
         error: error,
@@ -258,6 +282,29 @@ class LlamaService {
         tag: 'LlamaService',
       );
       throw _toSummaryException(error);
+    }
+  }
+
+  Future<void> _invokeStreamGeneration(
+    Map<String, dynamic> args,
+  ) async {
+    var attempt = 0;
+    while (true) {
+      try {
+        await Future<void>.delayed(
+          Duration(milliseconds: attempt == 0 ? 50 : 150),
+        );
+        await _llamaChannel.invokeMethod<void>('generateStream', args);
+        return;
+      } on PlatformException catch (error) {
+        final message = '${error.code} ${error.message ?? ''}'.toLowerCase();
+        final isNoEventSink = message.contains('no_event_sink') ||
+            message.contains('event channel not initialized');
+        if (!isNoEventSink || attempt >= 2) {
+          rethrow;
+        }
+        attempt++;
+      }
     }
   }
 
