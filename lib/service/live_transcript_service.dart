@@ -28,6 +28,7 @@ class LiveTranscriptService {
     VadHandler? vadHandler,
     this.onPartialText,
     this.onSegmentFinalized,
+    this.onBackgroundProcessingChanged,
   })  : _audioRecorderService = audioRecorderService,
         _whisperKitService = whisperKitService,
         _segmentCapture = segmentCapture ?? ConversationSegmentCapture(),
@@ -60,6 +61,9 @@ class LiveTranscriptService {
   /// Called as soon as a committed segment finishes transcribing.
   void Function(ConversationSegment segment)? onSegmentFinalized;
 
+  /// Called when background transcription starts or stops after a pause.
+  void Function(bool isProcessing)? onBackgroundProcessingChanged;
+
   StreamController<Uint8List>? _pcmStreamController;
   StreamSubscription<void>? _speechStartSubscription;
   StreamSubscription<List<double>>? _speechEndSubscription;
@@ -79,8 +83,17 @@ class LiveTranscriptService {
 
   bool _isActive = false;
   bool _isPaused = false;
+  bool _isBackgroundProcessing = false;
+
+  /// Incremented on each pause cycle so stale background completions are ignored.
+  int _pauseGeneration = 0;
+
+  /// Chains background transcription work across pause cycles.
+  Future<void>? _backgroundPendingCommit;
 
   bool get isPaused => _isPaused;
+
+  bool get isBackgroundProcessing => _isBackgroundProcessing;
 
   /// Starts VAD exactly once for the whole session (on a long-lived audio
   /// stream). Pause/resume only start/stop feeding that stream — they never
@@ -150,16 +163,66 @@ class LiveTranscriptService {
       debugPrint('$stackTrace');
     }
 
-    await _pendingCommit;
+    // Don't await pending transcription — let it complete in the background
+    // so the user can resume immediately.
+    _startBackgroundTranscription();
 
-    final result = await _transcribePendingSegments();
+    debugPrint('[LiveTranscript] paused (returned immediately)');
 
-    debugPrint(
-      '[LiveTranscript] paused (${result.segments.length} segments, '
-      'whisper=${result.usedWhisper}):\n${result.text}',
-    );
+    return _buildCurrentResult();
+  }
 
-    return result;
+  /// Kicks off background transcription of segments captured before [pause]
+  /// so the user can resume mic capture without waiting for inference.
+  void _startBackgroundTranscription() {
+    final generation = ++_pauseGeneration;
+    _isBackgroundProcessing = true;
+    onBackgroundProcessingChanged?.call(true);
+
+    final pendingCommit = _pendingCommit;
+    if (pendingCommit == null) {
+      _isBackgroundProcessing = false;
+      onBackgroundProcessingChanged?.call(false);
+      return;
+    }
+
+    // Snapshot the count of segments at pause time so the safety net below
+    // only touches pre-pause segments, not any captured after resume.
+    final snapshotCount = _segmentCapture.segments.length;
+
+    // Chain from the previous background future so rapid pause/resume cycles
+    // stay serialized — each safety-net waits for prior work to finish first.
+    _backgroundPendingCommit = (_backgroundPendingCommit ?? Future.value())
+        .then((_) => pendingCommit)
+        .then((_) async {
+      final segments = _segmentCapture.segments;
+      final prePauseSegments = segments.length >= snapshotCount
+          ? segments.sublist(0, snapshotCount)
+          : segments;
+      final pending = prePauseSegments
+          .where((s) => s.whisperText.trim().isEmpty)
+          .toList(growable: false);
+      if (pending.isNotEmpty) {
+        try {
+          await _whisperKitService.buildTranscriptFromSegments(pending);
+          for (final s in pending) {
+            if (s.whisperText.trim().isNotEmpty) {
+              onSegmentFinalized?.call(s);
+            }
+          }
+        } catch (error, stackTrace) {
+          debugPrint(
+            '[LiveTranscript] background safety net failed: $error',
+          );
+          debugPrint('$stackTrace');
+        }
+      }
+    }).whenComplete(() {
+      if (generation == _pauseGeneration) {
+        _isBackgroundProcessing = false;
+        onBackgroundProcessingChanged?.call(false);
+      }
+    });
   }
 
   /// Resume recording after [pause] by feeding the same, still-attached
@@ -214,6 +277,10 @@ class LiveTranscriptService {
     await _awaitFlush(flushCompleter);
     _flushCompleter = null;
     await _pendingCommit;
+
+    if (_backgroundPendingCommit != null) {
+      await _backgroundPendingCommit;
+    }
 
     try {
       await _vad.stopListening();

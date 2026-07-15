@@ -42,7 +42,7 @@ class PrimaryActionButton extends GetView<HomeController> {
                   icon: Icons.play_arrow_rounded,
                   filled: true,
                   compact: true,
-                  onPressed: isProcessing || isPausing ? null : controller.resumeCaptioning,
+                  onPressed: isPausing ? null : controller.resumeCaptioning,
                 ),
               ),
               const SizedBox(width: 12),
@@ -55,7 +55,7 @@ class PrimaryActionButton extends GetView<HomeController> {
                   backgroundColor: Colors.white,
                   foregroundColor: AppColors.stopRed,
                   borderColor: AppColors.stopRed,
-                  onPressed: isProcessing || isPausing
+                  onPressed: isPausing
                       ? null
                       : controller.stopCaptioning,
                 ),

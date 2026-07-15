@@ -88,6 +88,7 @@ class StatusBar extends GetView<HomeController> {
   }
 
   Widget _buildPausedBar() {
+    final isProcessing = controller.isProcessing.value;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -124,10 +125,13 @@ class StatusBar extends GetView<HomeController> {
                   ),
                 ),
                 Text(
-                  StringKeys.homeStopCaptioningPaused.tr,
-                  style: const TextStyle(
+                  isProcessing
+                      ? StringKeys.homeProcessing.tr
+                      : StringKeys.homeStopCaptioningPaused.tr,
+                  style: TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
+                    fontStyle: isProcessing ? FontStyle.italic : FontStyle.normal,
                   ),
                 ),
               ],

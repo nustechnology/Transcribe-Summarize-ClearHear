@@ -89,7 +89,12 @@ class HomeController extends GetxController {
           whisperKitService: _whisperKitService,
           onPartialText: _handlePartialText,
           onSegmentFinalized: _handleSegmentFinalized,
+          onBackgroundProcessingChanged: _handleBackgroundProcessingChanged,
         );
+  }
+
+  void _handleBackgroundProcessingChanged(bool processing) {
+    isProcessing.value = processing;
   }
 
   String get formattedSessionDurationLabel {
@@ -543,15 +548,12 @@ class HomeController extends GetxController {
     statusMessage.value = '';
 
     try {
-      final result = await liveTranscript.pause();
+      await liveTranscript.pause();
       if (!isCaptioning.value) return;
 
-      _applyTranscriptResult(result);
-      debugPrint(
-        '[Transcribe] Paused '
-        '(${result.segments.length} segments, whisper=${result.usedWhisper})',
-      );
-      debugPrint('[Transcribe] Paused text:\n${result.text}');
+      // Results are delivered incrementally via onSegmentFinalized and
+      // onBackgroundProcessingChanged — no need to await full transcription.
+      debugPrint('[Transcribe] Paused (returned immediately)');
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Pause failed: $error');
       debugPrint('$stackTrace');

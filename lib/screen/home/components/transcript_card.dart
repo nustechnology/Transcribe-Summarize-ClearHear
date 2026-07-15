@@ -274,7 +274,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
                     transcript: transcript,
                     transcriptSegments: transcriptSegments,
                     fontSize: fontSize,
-                    showProcessingTail: isPausing,
+                    showProcessingTail: isPausing || isProcessing,
                   ),
                 ],
               ),
