@@ -85,6 +85,33 @@ def patch_flutter_llama_podspec!
   File.write(podspec_path, content)
 end
 
+# ---------------------------------------------------------------------------
+# Fix: flutter_llama bridge crashes on iOS because ggml_backend_load_all()
+# tries to dlopen GPU backends (Metal/CUDA dylibs) which isn't allowed on iOS.
+# Wrap it with #if !TARGET_OS_IOS since the model runs CPU-only (n_gpu_layers=0).
+# ---------------------------------------------------------------------------
+def patch_llama_bridge_ios!
+  plugin_root = File.expand_path(File.join('.symlinks', 'plugins', 'flutter_llama'), __dir__)
+  file_path = File.join(plugin_root, 'ios', 'Classes', 'llama_cpp_bridge.mm')
+  return unless File.exist?(file_path)
+
+  content = File.read(file_path)
+  return if content.include?('PATCHED_FOR_CLEARHEAR_LLAMA')
+
+  old = '    ggml_backend_load_all();'
+  new = '    // ggml_backend_load_all(); // PATCHED_FOR_CLEARHEAR_LLAMA -- iOS forbids dlopen of GPU backends'
+
+  unless content.sub!(old, new)
+    raise <<~MSG
+      llama_cpp_bridge.mm patch failed: ggml_backend_load_all() line not found.
+      File: #{file_path}
+    MSG
+  end
+
+  File.write(file_path, content)
+  puts '[ClearHear] Patched llama_cpp_bridge.mm -- disabled GPU backend dlopen on iOS'
+end
+
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
@@ -107,6 +134,186 @@ def flutter_root
   raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
 end
 
+# ---------------------------------------------------------------------------
+# Fix: audio_waveforms iOS bytes-stream captures mic at hardware sample
+# rate (~48 kHz) but the on-device ASR model needs exactly 16 kHz.
+# V3: tap input at hardware format, resample each buffer via AVAudioConverter.
+# ---------------------------------------------------------------------------
+def patch_audio_waveforms_ios_sample_rate!
+  plugin_root = File.expand_path(File.join('.symlinks', 'plugins', 'audio_waveforms'), __dir__)
+  file_path = File.join(plugin_root, 'ios', 'Classes', 'RecorderBytesStreamEngine.swift')
+  return unless File.exist?(file_path)
+
+  content = File.read(file_path)
+  return if content.include?('PATCHED_FOR_CLEARHEAR_SAMPLE_RATE_V3')
+
+  patched = <<~'SWIFT'
+//
+//  RecorderBytesStreamHandler.swift
+//  audio_waveforms
+//
+//  Created by Ujas Majithiya on 10/04/25.
+//
+//  PATCHED_FOR_CLEARHEAR_SAMPLE_RATE_V3: taps the input node at hardware
+//  format, then uses AVAudioConverter to resample each buffer down to
+//  the requested sampleRate so on-device ASR models receive 16 kHz audio.
+
+import Foundation
+import AVFAudio
+import Accelerate
+
+class RecorderBytesStreamEngine {
+    private var audioEngine = AVAudioEngine()
+    private var flutterChannel: FlutterMethodChannel
+    private var paused: Bool = false
+    private var totalFrames: AVAudioFramePosition = 0
+    private var converter: AVAudioConverter?
+    private var outputFormat: AVAudioFormat?
+
+    init(channel: FlutterMethodChannel) {
+        flutterChannel = channel
+    }
+
+    func attach(result: @escaping FlutterResult, sampleRate: Int) {
+        let inputNode = audioEngine.inputNode
+        let hwFormat = inputNode.outputFormat(forBus: 0)
+
+        guard let outFmt = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: Double(sampleRate),
+            channels: 1,
+            interleaved: false
+        ) else {
+            result(FlutterError(code: Constants.audioWaveforms, message: "Failed to create output audio format", details: nil))
+            return
+        }
+        outputFormat = outFmt
+
+        guard let conv = AVAudioConverter(from: hwFormat, to: outFmt) else {
+            result(FlutterError(code: Constants.audioWaveforms, message: "Failed to create audio converter", details: nil))
+            return
+        }
+        converter = conv
+
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { (buffer, time) in
+            if self.paused {
+                return
+            }
+            let workBuffer = self.resampleIfNeeded(buffer)
+            guard let workBuffer else { return }
+
+            if let (convertedBytes, normalizedRms) = self.convertToFlutterType(workBuffer) {
+                self.totalFrames += AVAudioFramePosition(workBuffer.frameLength)
+                let effectiveSampleRate = workBuffer.format.sampleRate > 0 ? workBuffer.format.sampleRate : Double(sampleRate)
+                let duration = Double(self.totalFrames) / effectiveSampleRate
+                let milliseconds = Int(duration * 1000)
+                self.sendToFlutter(
+                    convertedBytes,
+                    normalizedRms: normalizedRms,
+                    milliSeconds: milliseconds
+                )
+            }
+        }
+        do {
+            try audioEngine.start()
+        } catch {
+           result(FlutterError(code: Constants.audioWaveforms, message: "Error starting Audio Engine", details: error.localizedDescription))
+        }
+    }
+
+    func togglePause() {
+        paused = !paused
+    }
+
+    func detach() {
+        totalFrames = 0
+        converter = nil
+        outputFormat = nil
+        audioEngine.inputNode.removeTap(onBus: 0)
+        audioEngine.stop()
+    }
+
+    private func resampleIfNeeded(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let converter, let outFmt = outputFormat else { return nil }
+
+        if buffer.format.sampleRate == outFmt.sampleRate { return buffer }
+
+        let ratio = outFmt.sampleRate / buffer.format.sampleRate
+        let outCapacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio + 1)
+        guard let outBuf = AVAudioPCMBuffer(pcmFormat: outFmt, frameCapacity: outCapacity) else {
+            return nil
+        }
+
+        var consumed = false
+        var error: NSError?
+        let inputBlock: AVAudioConverterInputBlock = { _ /* inNumPackets */, outStatus in
+            if consumed {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+            consumed = true
+            outStatus.pointee = .haveData
+            return buffer
+        }
+
+        converter.convert(to: outBuf, error: &error, withInputFrom: inputBlock)
+
+        if let error {
+            print("[RecorderBytesStreamEngine] converter error: \(error)")
+            return nil
+        }
+
+        return outBuf
+    }
+
+    private func convertToFlutterType(_ buffer: AVAudioPCMBuffer) -> (FlutterStandardTypedData, Double)? {
+        guard let channelData = buffer.floatChannelData?[0] else { return nil }
+        let frameLength = Int(buffer.frameLength)
+
+        // Convert Float32 buffer to UInt8 (byte array)
+        var audioSamples = [Float32](repeating: 0.0, count: frameLength)
+        var sumOfSquares: Float = 0.0
+
+        for i in 0..<frameLength {
+            audioSamples[i] = channelData[i]
+            sumOfSquares += channelData[i] * channelData[i]
+        }
+
+        // Calculate RMS
+        var rms: Float = 0.0
+        vDSP_rmsqv(
+            audioSamples, 1, &rms,
+            vDSP_Length(frameLength)
+        )
+
+        // Normalize RMS to 0-1 range (assuming max amplitude is 1.0 for Float32)
+        let normalizedRms = Double(min(rms, 1.0))
+
+        let byteBuffer = audioSamples.withUnsafeBufferPointer { bufferPointer in
+            return Data(buffer: bufferPointer)
+        }
+        let convertedBuffer = FlutterStandardTypedData(bytes: byteBuffer)
+        return (convertedBuffer, normalizedRms)
+
+    }
+
+    private func sendToFlutter(_ buffer: FlutterStandardTypedData, normalizedRms: Double, milliSeconds: Int) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            flutterChannel.invokeMethod(Constants.onAudioChunk, arguments: [
+                Constants.bytes: buffer,
+                Constants.normalisedRms: normalizedRms,
+                Constants.recordedDuration: milliSeconds,
+            ])
+        }
+    }
+}
+  SWIFT
+
+  File.write(file_path, patched)
+  puts '[ClearHear] Patched audio_waveforms iOS bytes-stream with AVAudioConverter resampling'
+end
+
 require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
 
 flutter_ios_podfile_setup
@@ -121,6 +328,8 @@ target 'Runner' do
   use_frameworks!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  patch_llama_bridge_ios!
+  patch_audio_waveforms_ios_sample_rate!
   target 'RunnerTests' do
     inherit! :search_paths
   end
