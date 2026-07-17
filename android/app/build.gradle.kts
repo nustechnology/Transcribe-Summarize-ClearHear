@@ -45,7 +45,7 @@ android {
         if (isReleaseBuild) {
             create("release") {
                 keyAlias = requireNotNull(
-                    keystoreProperties.getProperty("keyAlias")
+                    keystoreProperties.getProperty("keyAlias")?.trim()
                 ) {
                     "Missing keyAlias in key.properties"
                 }
@@ -63,7 +63,7 @@ android {
                 }
 
                 val storeFileValue = requireNotNull(
-                    keystoreProperties.getProperty("storeFile")
+                    keystoreProperties.getProperty("storeFile")?.trim()
                 ) {
                     "Missing storeFile in key.properties"
                 }
