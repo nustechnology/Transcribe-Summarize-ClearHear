@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:transcribe_summarize_clearhear/arch/route/app_route.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/session_repository.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/settings_repository.dart';
 import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
@@ -145,6 +146,10 @@ class SettingsController extends GetxController {
     } finally {
       isClearing.value = false;
     }
+  }
+
+  void openDevelopment() {
+    Get.rootDelegate.toNamed(AppRoutes.development);
   }
 
   void openHelpAndSupport() {

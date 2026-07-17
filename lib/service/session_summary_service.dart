@@ -255,6 +255,13 @@ class SessionSummaryService extends GetxService {
         .replaceAll(RegExp(r'^\s*[-*•]\s*'), '')
         .replaceAll(RegExp(r'^\s*\d+[.)]\s*'), '')
         .replaceAll(RegExp(r'[*_`]+'), '')
+        .replaceAll(
+          RegExp(
+            r'^\s*(Overview|Decisions|Action items|Blockers)\s*:\s*',
+            caseSensitive: false,
+          ),
+          '',
+        )
         .trim();
   }
 

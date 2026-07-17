@@ -18,6 +18,7 @@ String buildSummaryPrompt(
       'You write concise meeting summaries in plain text only.\n'
       'Rules:\n'
       '- Use plain paragraphs only.\n'
+      '- No section labels such as Overview, Decisions, Action items, or Blockers.\n'
       '- No markdown headings, bullets, numbering, bold, italics, or code.\n'
       '- Max 250 words.\n'
       '- Focus on decisions, action items, blockers, and key context.\n'

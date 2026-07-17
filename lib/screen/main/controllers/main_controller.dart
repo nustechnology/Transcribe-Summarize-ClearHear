@@ -43,6 +43,9 @@ class MainController extends GetxController {
       if (currentPage.startsWith('${AppRoutes.history}/')) {
         return AppRoutes.history;
       }
+      if (currentPage == AppRoutes.development) {
+        return AppRoutes.settings;
+      }
     }
     return Get.currentRoute;
   }

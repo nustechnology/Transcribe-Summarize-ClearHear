@@ -83,7 +83,8 @@ fvm flutter build apk --release --split-per-abi
 **iOS IPA** (macOS + Xcode signing required)
 
 ```bash
-fvm flutter build ipa --release
+fvm flutter build ipa --release --export-options-plist=ios/ExportOptions-adhoc.plist
+
 ```
 
 Output: `build/ios/ipa/*.ipa`
