@@ -16,7 +16,7 @@ import '../../../screen/main/controllers/main_controller.dart';
 import '../../../service/audio_recorder_service.dart';
 import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
-import '../../../service/whisper_kit_service.dart';
+import '../../../service/sherpa_onnx_service.dart';
 import '../../../shared/caption_size_config.dart';
 import '../../../shared/models/settings_model.dart';
 import '../../../util/session_segment_mapper.dart';
@@ -25,14 +25,14 @@ import '../../../util/toast/app_toast.dart';
 class HomeController extends GetxController {
   HomeController({
     SettingsRepository? settingsRepository,
-    WhisperKitService? whisperKitService,
+    SherpaOnnxService? sherpaOnnxService,
     LlamaService? llamaService,
     AudioRecorderService? audioRecorderService,
     LiveTranscriptService? liveTranscriptService,
     SessionRepository? sessionRepository,
     SegmentRepository? segmentRepository,
   })  : _settingsRepository = settingsRepository,
-        _whisperKitService = whisperKitService ?? WhisperKitService(),
+        _sherpaOnnxService = sherpaOnnxService ?? SherpaOnnxService(),
         _llamaService = llamaService ?? LlamaService(),
         _audioRecorderService =
             audioRecorderService ?? AudioRecorderService(),
@@ -41,7 +41,7 @@ class HomeController extends GetxController {
         _segmentRepository = segmentRepository;
 
   final SettingsRepository? _settingsRepository;
-  final WhisperKitService _whisperKitService;
+  final SherpaOnnxService _sherpaOnnxService;
   final LlamaService _llamaService;
   final AudioRecorderService _audioRecorderService;
   final LiveTranscriptService? _liveTranscriptService;
@@ -86,7 +86,7 @@ class HomeController extends GetxController {
     return _liveTranscriptService ??
         LiveTranscriptService(
           audioRecorderService: _audioRecorderService,
-          whisperKitService: _whisperKitService,
+          sherpaOnnxService: _sherpaOnnxService,
           onPartialText: _handlePartialText,
           onSegmentFinalized: _handleSegmentFinalized,
         );
@@ -213,25 +213,24 @@ class HomeController extends GetxController {
     isAsrModelLoading.value = true;
     isAsrModelReady.value = false;
     asrModelDownloadProgress.value = 0;
-    _whisperKitService.onDownloadProgress = (received, total) {
+    _sherpaOnnxService.onDownloadProgress = (_, received, total) {
       if (total <= 0) {
         asrModelDownloadProgress.value = 0.0;
         return;
       }
-
       final progress = (received / total).clamp(0.0, 1.0);
       asrModelDownloadProgress.value = progress.toDouble();
     };
     try {
-      await _whisperKitService.ensureModelReady();
+      await _sherpaOnnxService.ensureModelReady();
       asrModelDownloadProgress.value = 1;
       isAsrModelReady.value = true;
     } catch (error, stackTrace) {
-      debugPrint('[Transcribe] WhisperKit preload failed: $error');
+      debugPrint('[Transcribe] SherpaOnnx preload failed: $error');
       debugPrint('$stackTrace');
       statusMessage.value = StringKeys.transcriptionModelFailed;
     } finally {
-      _whisperKitService.onDownloadProgress = null;
+      _sherpaOnnxService.onDownloadProgress = null;
       isAsrModelLoading.value = false;
     }
   }
@@ -347,13 +346,13 @@ class HomeController extends GetxController {
       _applyTranscriptResult(result);
       debugPrint(
         '[Transcribe] Stop complete '
-        '(${result.segments.length} segments, whisper=${result.usedWhisper})',
+        '(${result.segments.length} segments, asr=${result.usedAsr})',
       );
-      debugPrint('[Transcribe] Whisper text:\n${result.text}');
+      debugPrint('[Transcribe] ASR text:\n${result.text}');
       for (final segment in result.segments) {
         debugPrint(
           '[Transcribe] segment ${segment.id} '
-          'whisper="${segment.whisperText}" wav=${segment.wavPath}',
+          'asr="${segment.asrText}"',
         );
       }
       final hasVisibleTranscript =
@@ -549,7 +548,7 @@ class HomeController extends GetxController {
       _applyTranscriptResult(result);
       debugPrint(
         '[Transcribe] Paused '
-        '(${result.segments.length} segments, whisper=${result.usedWhisper})',
+        '(${result.segments.length} segments, asr=${result.usedAsr})',
       );
       debugPrint('[Transcribe] Paused text:\n${result.text}');
     } catch (error, stackTrace) {
@@ -678,7 +677,7 @@ class HomeController extends GetxController {
     await _awaitPendingFinish();
 
     await _audioRecorderService.dispose();
-    await _whisperKitService.dispose();
+    await _sherpaOnnxService.dispose();
   }
 }
 

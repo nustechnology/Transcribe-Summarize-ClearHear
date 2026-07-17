@@ -35,6 +35,14 @@ void main() {
     expect(prompt, contains('<|im_start|> assistant'));
   });
 
+  test('buildSummaryPrompt forbids section labels and markdown', () {
+    final prompt = buildSummaryPrompt('some transcript text');
+
+    expect(prompt, contains('No section labels'));
+    expect(prompt, contains('No markdown'));
+    expect(prompt, isNot(contains('Always answer using exactly these four')));
+  });
+
   test('buildBoundedSummaryPrompt stays within batch/context budget', () {
     final transcript = List.generate(2000, (i) => 'word$i').join(' ');
     final maxPromptTokens = [

@@ -4,9 +4,9 @@ import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/lang/translation.dart';
 import 'package:transcribe_summarize_clearhear/screen/home/controllers/home_controller.dart';
 import 'package:transcribe_summarize_clearhear/screen/home/home_widget.dart';
-import 'package:transcribe_summarize_clearhear/service/whisper_kit_service.dart';
+import 'package:transcribe_summarize_clearhear/service/sherpa_onnx_service.dart';
 
-class _FakeWhisperKitService extends WhisperKitService {
+class _FakeSherpaOnnxService extends SherpaOnnxService {
   @override
   Future<void> ensureModelReady() async {}
 
@@ -20,7 +20,7 @@ void main() {
     await Translation.load();
     Get.locale = const Locale('en', 'US');
     Get.fallbackLocale = const Locale('en', 'US');
-    Get.put(HomeController(whisperKitService: _FakeWhisperKitService()));
+    Get.put(HomeController(sherpaOnnxService: _FakeSherpaOnnxService()));
 
     await tester.pumpWidget(
       GetMaterialApp(

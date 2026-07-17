@@ -1,21 +1,20 @@
-/// One speech segment saved as a WAV file during a captioning session.
+/// One speech segment produced during a captioning session.
 class ConversationSegment {
   ConversationSegment({
     required this.id,
-    required this.wavPath,
+    this.wavPath = '',
     required this.recordedAt,
-    this.liveText = '',
-    this.whisperText = '',
+    this.asrText = '',
   });
 
   final int id;
   final String wavPath;
   final DateTime recordedAt;
-  final String liveText;
-  String whisperText;
+  String asrText;
 
-  String get displayText =>
-      whisperText.trim().isNotEmpty ? whisperText.trim() : liveText.trim();
+  String get displayText => asrText.trim();
+
+  bool get hasText => asrText.trim().isNotEmpty;
 }
 
 /// Result returned when a captioning session ends.
@@ -23,10 +22,10 @@ class LiveTranscriptResult {
   const LiveTranscriptResult({
     required this.text,
     this.segments = const [],
-    this.usedWhisper = false,
+    this.usedAsr = false,
   });
 
   final String text;
   final List<ConversationSegment> segments;
-  final bool usedWhisper;
+  final bool usedAsr;
 }

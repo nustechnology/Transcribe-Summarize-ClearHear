@@ -256,9 +256,11 @@ class LlamaService {
         GenerationParams(
           prompt: buildBoundedSummaryPrompt(transcript),
           maxTokens: MlModelConfig.summaryMaxTokens,
-          temperature: 0.2,
-          topP: 0.9,
-          topK: 40,
+          // Greedy decoding: llama.cpp treats temperature <= 0 as argmax,
+          // so identical transcripts always produce identical summaries.
+          temperature: 0.0,
+          topP: 1.0,
+          topK: 1,
           repeatPenalty: 1.1,
         ).toMap(),
       ).catchError((Object error, StackTrace stackTrace) {
@@ -319,6 +321,13 @@ class LlamaService {
                 .replaceAll(RegExp(r'^\s*[-*•]\s*'), '')
                 .replaceAll(RegExp(r'^\s*\d+[.)]\s*'), '')
                 .replaceAll(RegExp(r'[*_`]+'), '')
+                .replaceAll(
+                  RegExp(
+                    r'^\s*(Overview|Decisions|Action items|Blockers)\s*:\s*',
+                    caseSensitive: false,
+                  ),
+                  '',
+                )
                 .trim())
             .where((line) => line.isNotEmpty)
             .join(' ')

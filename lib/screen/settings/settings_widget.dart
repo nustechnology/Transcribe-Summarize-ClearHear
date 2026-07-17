@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
@@ -144,6 +145,20 @@ class SettingsView extends GetView<SettingsController> {
                     ),
                   ],
                 ),
+                if (kDebugMode) ...[
+                  const SizedBox(height: 16),
+                  SettingsSectionCard(
+                    icon: Icons.developer_mode_outlined,
+                    title: StringKeys.settingsDevelopment.tr,
+                    children: [
+                      SettingsNavRow(
+                        title: StringKeys.settingsDevelopmentTools.tr,
+                        subtitle: StringKeys.settingsDevelopmentToolsHint.tr,
+                        onTap: controller.openDevelopment,
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 SettingsSectionCard(
                   icon: Icons.info_outline,
