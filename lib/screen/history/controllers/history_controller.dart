@@ -248,7 +248,6 @@ class HistoryController extends GetxController {
       items.assignAll(result.items);
       _offset = result.items.length;
       hasMore.value = result.hasMore;
-      unawaited(_queuePendingSummaries(result.items));
     } finally {
       isLoading.value = false;
     }
@@ -273,7 +272,6 @@ class HistoryController extends GetxController {
       items.addAll(result.items);
       _offset += result.items.length;
       hasMore.value = result.hasMore;
-      unawaited(_queuePendingSummaries(result.items));
     } finally {
       isLoadingMore.value = false;
     }
@@ -310,21 +308,6 @@ class HistoryController extends GetxController {
       if (itemIndex == -1 && searchIndex == -1) return;
       unawaited(_refreshSessionPreview(id, itemIndex, searchIndex));
     });
-  }
-
-  Future<void> _queuePendingSummaries(List<HistoryItem> loadedItems) async {
-    final service = _summaryService;
-    if (service == null) return;
-
-    for (final item in loadedItems) {
-      final status = item.summaryStatus;
-      if (status != 'idle' && status != 'queued' && status != 'processing') {
-        continue;
-      }
-      final sessionId = int.tryParse(item.id);
-      if (sessionId == null) continue;
-      unawaited(service.queue(sessionId));
-    }
   }
 
   Future<void> _refreshSessionPreview(
