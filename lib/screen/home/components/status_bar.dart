@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-import '../../../lang/string_keys.dart';
-import '../../../style/theme.dart';
-import '../controllers/home_controller.dart';
+import 'package:transcribe_summarize_clearhear/lang/string_keys.dart';
+import 'package:transcribe_summarize_clearhear/screen/home/controllers/home_controller.dart';
+import 'package:transcribe_summarize_clearhear/style/theme.dart';
+import 'package:transcribe_summarize_clearhear/shared/caption_size_config.dart';
 
 class StatusBar extends GetView<HomeController> {
   const StatusBar({super.key});
@@ -80,6 +80,10 @@ class StatusBar extends GetView<HomeController> {
             _FontSizeControl(
               onDecrease: controller.decreaseFontSize,
               onIncrease: controller.increaseFontSize,
+              canDecrease:
+                  controller.transcriptFontSize.value > CaptionSizeConfig.min,
+              canIncrease:
+                  controller.transcriptFontSize.value < CaptionSizeConfig.max,
             ),
           ],
         ),
@@ -239,7 +243,26 @@ class _PausedWaveform extends StatelessWidget {
   const _PausedWaveform();
 
   static const _barHeights = [
-    0.35, 0.55, 0.75, 0.45, 0.65, 0.85, 0.5, 0.4, 0.6, 0.7, 0.45, 0.55, 0.65, 0.85, 0.5, 0.4, 0.6, 0.7, 0.45, 0.55,
+    0.35,
+    0.55,
+    0.75,
+    0.45,
+    0.65,
+    0.85,
+    0.5,
+    0.4,
+    0.6,
+    0.7,
+    0.45,
+    0.55,
+    0.65,
+    0.85,
+    0.5,
+    0.4,
+    0.6,
+    0.7,
+    0.45,
+    0.55,
   ];
 
   @override
@@ -273,16 +296,20 @@ class _FontSizeControl extends StatelessWidget {
   const _FontSizeControl({
     required this.onDecrease,
     required this.onIncrease,
+    required this.canDecrease,
+    required this.canIncrease,
   });
 
   final VoidCallback onDecrease;
   final VoidCallback onIncrease;
+  final bool canDecrease;
+  final bool canIncrease;
 
-  static const _labelStyle = TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w500,
-    color: AppColors.textPrimary,
-  );
+  static TextStyle _labelStyle(bool enabled) => TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: enabled ? AppColors.textPrimary : AppColors.textMuted,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -291,28 +318,36 @@ class _FontSizeControl extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF5F5F5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: canDecrease || canIncrease
+              ? AppColors.border
+              : AppColors.border.withValues(alpha: 0.5),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _segment(
             labelKey: StringKeys.homeFontDecrease,
+            enabled: canDecrease,
             onPressed: onDecrease,
             borderRadius: const BorderRadius.horizontal(
-              left: Radius.circular(17),
+              left: Radius.circular(12),
             ),
           ),
           Container(
             width: 1,
             height: 18,
-            color: AppColors.border,
+            color: canDecrease || canIncrease
+                ? AppColors.border
+                : AppColors.border.withValues(alpha: 0.5),
           ),
           _segment(
             labelKey: StringKeys.homeFontIncrease,
+            enabled: canIncrease,
             onPressed: onIncrease,
             borderRadius: const BorderRadius.horizontal(
-              right: Radius.circular(17),
+              right: Radius.circular(12),
             ),
           ),
         ],
@@ -322,18 +357,22 @@ class _FontSizeControl extends StatelessWidget {
 
   Widget _segment({
     required String labelKey,
+    required bool enabled,
     required VoidCallback onPressed,
     required BorderRadius borderRadius,
   }) {
-    return Material(
-      color: Colors.transparent,
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.45,
       child: InkWell(
-        onTap: onPressed,
+        onTap: enabled ? onPressed : null,
         borderRadius: borderRadius,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Center(
-            child: Text(labelKey.tr, style: _labelStyle),
+            child: Text(
+              labelKey.tr,
+              style: _labelStyle(enabled),
+            ),
           ),
         ),
       ),
