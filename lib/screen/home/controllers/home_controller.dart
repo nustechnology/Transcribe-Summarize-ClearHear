@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:audio_waveforms/audio_waveforms.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
 import '../../../arch/repository/segment_repository.dart';
@@ -14,6 +14,7 @@ import '../../../lang/string_keys.dart';
 import '../../../screen/history/controllers/history_controller.dart';
 import '../../../screen/main/controllers/main_controller.dart';
 import '../../../service/audio_recorder_service.dart';
+import '../../../service/foreground_service_handler.dart';
 import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
 import '../../../service/sherpa_onnx_service.dart';
@@ -22,7 +23,7 @@ import '../../../shared/models/settings_model.dart';
 import '../../../util/session_segment_mapper.dart';
 import '../../../util/toast/app_toast.dart';
 
-class HomeController extends GetxController {
+class HomeController extends GetxController with WidgetsBindingObserver {
   HomeController({
     SettingsRepository? settingsRepository,
     SherpaOnnxService? sherpaOnnxService,
@@ -34,8 +35,7 @@ class HomeController extends GetxController {
   })  : _settingsRepository = settingsRepository,
         _sherpaOnnxService = sherpaOnnxService ?? SherpaOnnxService(),
         _llamaService = llamaService ?? LlamaService(),
-        _audioRecorderService =
-            audioRecorderService ?? AudioRecorderService(),
+        _audioRecorderService = audioRecorderService ?? AudioRecorderService(),
         _liveTranscriptService = liveTranscriptService,
         _sessionRepository = sessionRepository,
         _segmentRepository = segmentRepository;
@@ -170,8 +170,14 @@ class HomeController extends GetxController {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint('[Lifecycle] state=$state isCaptioning=${isCaptioning.value}');
+  }
+
+  @override
   void onInit() {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_preloadAsrModel());
     unawaited(_loadPersistedSettings());
   }
@@ -269,6 +275,8 @@ class HomeController extends GetxController {
       _activeLiveTranscript = _createLiveTranscriptService();
       await _activeLiveTranscript!.start();
 
+      unawaited(ForegroundServiceHandler.start());
+
       _captioningStartedAt = DateTime.now();
       _startDurationTimer();
 
@@ -307,6 +315,8 @@ class HomeController extends GetxController {
     partialTranscript.value = '';
     _stopDurationTimer();
     _resetCaptionFontSize();
+
+    unawaited(ForegroundServiceHandler.stop());
 
     final liveTranscript = _activeLiveTranscript;
     _activeLiveTranscript = null;
@@ -523,7 +533,8 @@ class HomeController extends GetxController {
       _saveTranscriptsEnabled = settings.savingEnabled;
       return settings.savingEnabled;
     } catch (error, stackTrace) {
-      debugPrint('[Transcribe] Failed to read save-transcripts setting: $error');
+      debugPrint(
+          '[Transcribe] Failed to read save-transcripts setting: $error');
       debugPrint('$stackTrace');
       return _saveTranscriptsEnabled;
     }
@@ -555,8 +566,7 @@ class HomeController extends GetxController {
       debugPrint('[Transcribe] Pause failed: $error');
       debugPrint('$stackTrace');
       isPaused.value = false;
-      _captioningStartedAt =
-          DateTime.now().subtract(captioningElapsed.value);
+      _captioningStartedAt = DateTime.now().subtract(captioningElapsed.value);
       _startDurationTimer();
       statusMessage.value = StringKeys.transcriptionFailed;
     } finally {
@@ -575,8 +585,7 @@ class HomeController extends GetxController {
       await liveTranscript.resume();
       isPaused.value = false;
       statusMessage.value = '';
-      _captioningStartedAt =
-          DateTime.now().subtract(captioningElapsed.value);
+      _captioningStartedAt = DateTime.now().subtract(captioningElapsed.value);
       _startDurationTimer();
       debugPrint('[Transcribe] Resumed captioning');
     } catch (error, stackTrace) {
@@ -647,20 +656,24 @@ class HomeController extends GetxController {
 
   void increaseFontSize() {
     if (!isCaptioning.value) return;
-    transcriptFontSize.value = (transcriptFontSize.value + CaptionSizeConfig.step)
-        .clamp(CaptionSizeConfig.min, CaptionSizeConfig.max)
-        .toDouble();
+    transcriptFontSize.value =
+        (transcriptFontSize.value + CaptionSizeConfig.step)
+            .clamp(CaptionSizeConfig.min, CaptionSizeConfig.max)
+            .toDouble();
   }
 
   void decreaseFontSize() {
     if (!isCaptioning.value) return;
-    transcriptFontSize.value = (transcriptFontSize.value - CaptionSizeConfig.step)
-        .clamp(CaptionSizeConfig.min, CaptionSizeConfig.max)
-        .toDouble();
+    transcriptFontSize.value =
+        (transcriptFontSize.value - CaptionSizeConfig.step)
+            .clamp(CaptionSizeConfig.min, CaptionSizeConfig.max)
+            .toDouble();
   }
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(ForegroundServiceHandler.stop());
     unawaited(_tearDown());
     super.onClose();
   }

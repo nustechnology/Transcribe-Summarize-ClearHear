@@ -1,5 +1,7 @@
 package com.nus.clearhear
 
+import android.content.Intent
+import android.os.Build
 import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -10,6 +12,7 @@ import java.io.IOException
 
 class MainActivity: FlutterActivity() {
     private val modelAssetChannel = "clearhear/model_assets"
+    private val foregroundServiceChannel = "clearhear/foreground_service"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -44,6 +47,35 @@ class MainActivity: FlutterActivity() {
                             null,
                         )
                     }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            foregroundServiceChannel,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> {
+                    val intent = Intent(this, TranscriptionForegroundService::class.java)
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(intent)
+                        } else {
+                            startService(intent)
+                        }
+                        result.success(true)
+                    } catch (e: android.app.ForegroundServiceStartNotAllowedException) {
+                        result.error("start_not_allowed", e.message, null)
+                    } catch (e: SecurityException) {
+                        result.error("security_exception", e.message, null)
+                    }
+                }
+                "stop" -> {
+                    val intent = Intent(this, TranscriptionForegroundService::class.java)
+                    stopService(intent)
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }

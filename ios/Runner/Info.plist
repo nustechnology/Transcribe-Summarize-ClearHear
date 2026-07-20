@@ -28,6 +28,10 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ClearHear needs microphone access to transcribe speech.</string>
+	<key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+    </array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
