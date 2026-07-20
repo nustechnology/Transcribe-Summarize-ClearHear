@@ -31,9 +31,14 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
   Worker? _partialWorker;
   Worker? _summaryWorker;
 
+  bool _autoScrollEnabled = true;
+
+  int _pendingAutoScrolls = 0;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onUserScroll);
     _transcriptWorker =
         ever(widget.controller.transcriptSegments, (_) => _scrollToBottom());
     _partialWorker =
@@ -46,22 +51,35 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     _transcriptWorker?.dispose();
     _partialWorker?.dispose();
     _summaryWorker?.dispose();
+    _scrollController.removeListener(_onUserScroll);
     _scrollController.dispose();
     super.dispose();
   }
 
+  void _onUserScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_pendingAutoScrolls > 0) return;
+    _autoScrollEnabled = _scrollController.position.extentAfter <= 0;
+  }
+
   void _scrollToBottom() {
+    if (!_autoScrollEnabled) return;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
+      if (!_autoScrollEnabled) return;
 
       final target = _scrollController.position.maxScrollExtent;
       if (target <= 0) return;
 
+      _pendingAutoScrolls++;
       _scrollController.animateTo(
         target,
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOut,
-      );
+      ).whenComplete(() {
+        if (_pendingAutoScrolls > 0) _pendingAutoScrolls--;
+      });
     });
   }
 
