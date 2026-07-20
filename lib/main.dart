@@ -1,12 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:transcribe_summarize_clearhear/service/database_service.dart';
 
 import 'arch/route/app_route.dart';
 import 'lang/string_keys.dart';
 import 'lang/translation.dart';
 import 'shared/app_version.dart';
+import 'util/audio_setup.dart';
 import 'util/debug_seed.dart';
 import 'util/mock_history_data.dart';
 import 'screen/main/bindings/main_binding.dart';
@@ -14,6 +18,13 @@ import 'style/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await setupAudioSession();
+
+  if (Platform.isAndroid) {
+    await Permission.notification.request();
+  }
+
   await Future.wait([
     Translation.load(),
     AppVersion.init(),
