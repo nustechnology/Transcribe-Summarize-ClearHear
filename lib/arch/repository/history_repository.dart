@@ -30,6 +30,7 @@ class HistoryRepository {
       final result = await _sessionRepository.getAllSessions(
         offset: offset,
         limit: limit,
+        savedOnly: true,
       );
       final items = result.items.map(_toHistoryItem).toList();
       return HistoryPageResult(items: items, hasMore: result.hasMore);

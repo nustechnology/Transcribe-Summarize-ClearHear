@@ -9,6 +9,7 @@ import 'package:transcribe_summarize_clearhear/service/database_service.dart';
 import '../../../arch/repository/history_repository.dart';
 import '../../home/controllers/home_controller.dart';
 import '../controllers/main_controller.dart';
+import '../../../service/crash_recovery_service.dart';
 import '../../../service/llama_service.dart';
 import '../../../service/session_summary_service.dart';
 
@@ -42,6 +43,14 @@ class MainBinding extends Bindings {
     if (!Get.isRegistered<HistoryRepository>()) {
       Get.lazyPut<HistoryRepository>(
         () => HistoryRepository(sessionRepository: Get.find()),
+      );
+    }
+    if (!Get.isRegistered<CrashRecoveryService>()) {
+      Get.lazyPut<CrashRecoveryService>(
+        () => CrashRecoveryService(
+          sessionRepository: Get.find(),
+          segmentRepository: Get.find(),
+        ),
       );
     }
     Get.lazyPut<MainController>(() => MainController());
