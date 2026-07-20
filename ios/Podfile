@@ -112,6 +112,146 @@ def patch_llama_bridge_ios!
   puts '[ClearHear] Patched llama_cpp_bridge.mm -- disabled GPU backend dlopen on iOS'
 end
 
+# ---------------------------------------------------------------------------
+# Fix: Swift @_silgen_name with String -> const char* can produce invalid
+# pointers on ARM64. Use withCString for explicit C-string bridging to prevent
+# EXC_BAD_ACCESS crashes during model loading / generation.
+# ---------------------------------------------------------------------------
+def patch_flutter_llama_swift_string_bridge!
+  plugin_root = File.expand_path(File.join('.symlinks', 'plugins', 'flutter_llama'), __dir__)
+  file_path = File.join(plugin_root, 'ios', 'Classes', 'FlutterLlamaPlugin.swift')
+  return unless File.exist?(file_path)
+
+  content = File.read(file_path)
+  decl_patched = false
+
+  # ------------------------------------------------------------------
+  # Step 1: ALWAYS fix @_silgen_name declarations
+  # String → UnsafePointer<CChar>! so the C function receives a real
+  # pointer, not the internal bytes of a Swift String struct.
+  # This runs even if the marker is already present, because earlier
+  # versions of this patch only fixed call sites, not declarations.
+  # ------------------------------------------------------------------
+  decl_patched = true if content.sub!('    _ modelPath: String,', '    _ modelPath: UnsafePointer<CChar>!,')
+  decl_patched = true if content.sub!('    _ prompt: String,', '    _ prompt: UnsafePointer<CChar>!,')
+  decl_patched = true if content.sub!('    _ prompt: String,', '    _ prompt: UnsafePointer<CChar>!,')
+
+  if decl_patched
+    File.write(file_path, content)
+    puts '[ClearHear] FlutterLlamaPlugin.swift — fixed String → UnsafePointer<CChar> in declarations'
+  end
+
+  # ------------------------------------------------------------------
+  # Step 2: wrap call sites with withCString (only if not already done)
+  # ------------------------------------------------------------------
+  return if content.include?('PATCHED_FOR_CLEARHEAR_SWIFT_STRING')
+
+  marker_line = '// PATCHED_FOR_CLEARHEAR_SWIFT_STRING -- withCString bridging'
+  indent12 = '            '
+  indent16 = '                '
+  indent20 = '                    '
+  nl = "\n"
+
+  # llama_init_model(modelPath, ...)
+  old1 = [
+    "#{indent12}let success = llama_init_model(",
+    "#{indent16}modelPath,",
+    "#{indent16}Int32(nThreads),",
+    "#{indent16}Int32(nGpuLayers),",
+    "#{indent16}Int32(contextSize),",
+    "#{indent16}Int32(batchSize),",
+    "#{indent16}useGpu,",
+    "#{indent16}verbose",
+    "#{indent12})",
+  ].join(nl)
+
+  new1 = [
+    "#{indent12}#{marker_line}",
+    "#{indent12}let success = modelPath.withCString { cModelPath in",
+    "#{indent16}llama_init_model(",
+    "#{indent20}cModelPath,",
+    "#{indent20}Int32(nThreads),",
+    "#{indent20}Int32(nGpuLayers),",
+    "#{indent20}Int32(contextSize),",
+    "#{indent20}Int32(batchSize),",
+    "#{indent20}useGpu,",
+    "#{indent20}verbose",
+    "#{indent16})",
+    "#{indent12}}",
+  ].join(nl)
+
+  unless content.sub!(old1, new1)
+    raise "llama_init_model call-site patch failed in #{file_path}"
+  end
+
+  # llama_generate(prompt, ...)
+  old2 = [
+    "#{indent12}let success = llama_generate(",
+    "#{indent16}prompt,",
+    "#{indent16}Float(temperature),",
+    "#{indent16}Float(topP),",
+    "#{indent16}Int32(topK),",
+    "#{indent16}Int32(maxTokens),",
+    "#{indent16}Float(repeatPenalty),",
+    "#{indent16}&outputBuffer,",
+    "#{indent16}Int32(outputBuffer.count),",
+    "#{indent16}&tokensGenerated",
+    "#{indent12})",
+  ].join(nl)
+
+  new2 = [
+    "#{indent12}let success = prompt.withCString { cPrompt in",
+    "#{indent16}llama_generate(",
+    "#{indent20}cPrompt,",
+    "#{indent20}Float(temperature),",
+    "#{indent20}Float(topP),",
+    "#{indent20}Int32(topK),",
+    "#{indent20}Int32(maxTokens),",
+    "#{indent20}Float(repeatPenalty),",
+    "#{indent20}&outputBuffer,",
+    "#{indent20}Int32(outputBuffer.count),",
+    "#{indent20}&tokensGenerated",
+    "#{indent16})",
+    "#{indent12}}",
+  ].join(nl)
+
+  unless content.sub!(old2, new2)
+    raise "llama_generate call-site patch failed in #{file_path}"
+  end
+
+  # llama_generate_stream_init(prompt, ...)
+  old3 = [
+    "#{indent12}llama_generate_stream_init(",
+    "#{indent16}prompt,",
+    "#{indent16}Float(temperature),",
+    "#{indent16}Float(topP),",
+    "#{indent16}Int32(topK),",
+    "#{indent16}Int32(maxTokens),",
+    "#{indent16}Float(repeatPenalty)",
+    "#{indent12})",
+  ].join(nl)
+
+  new3 = [
+    "#{indent12}prompt.withCString { cPrompt in",
+    "#{indent16}llama_generate_stream_init(",
+    "#{indent20}cPrompt,",
+    "#{indent20}Float(temperature),",
+    "#{indent20}Float(topP),",
+    "#{indent20}Int32(topK),",
+    "#{indent20}Int32(maxTokens),",
+    "#{indent20}Float(repeatPenalty)",
+    "#{indent16})",
+    "#{indent12}}",
+  ].join(nl)
+
+  unless content.sub!(old3, new3)
+    raise "llama_generate_stream_init call-site patch failed in #{file_path}"
+  end
+
+  File.write(file_path, content)
+  puts '[ClearHear] Patched FlutterLlamaPlugin.swift — UnsafePointer<CChar> + withCString bridging'
+end
+
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
@@ -329,6 +469,7 @@ target 'Runner' do
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   patch_llama_bridge_ios!
+  patch_flutter_llama_swift_string_bridge!
   patch_audio_waveforms_ios_sample_rate!
   target 'RunnerTests' do
     inherit! :search_paths
