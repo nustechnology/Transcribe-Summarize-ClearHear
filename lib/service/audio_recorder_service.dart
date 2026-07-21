@@ -22,6 +22,9 @@ class AudioRecorderService {
   String? _recordingPath;
   bool _isStreaming = false;
 
+  static const _recordingPrefix = 'caption_pcm_';
+  static final Set<String> _activeRecordingPaths = {};
+
   static const recorderSettings = RecorderSettings(
     androidEncoderSettings: AndroidEncoderSettings(
       androidEncoder: AndroidEncoder.wav,
@@ -45,6 +48,23 @@ class AudioRecorderService {
 
   Future<bool> openSystemSettings() => openAppSettings();
 
+  /// Deletes leftover recording files a hard-terminated session never cleaned up.
+  static Future<void> cleanupOrphanRecordings() async {
+    try {
+      final directory = await getTemporaryDirectory();
+      if (!directory.existsSync()) return;
+      for (final entity in directory.listSync()) {
+        if (entity is File &&
+            p.basename(entity.path).startsWith(_recordingPrefix) &&
+            !_activeRecordingPaths.contains(entity.path)) {
+          try {
+            entity.deleteSync();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
   bool get isStreaming => _isStreaming;
 
   Future<void> startStreaming({required PcmChunkCallback onChunk}) async {
@@ -53,9 +73,10 @@ class AudioRecorderService {
     final directory = await getTemporaryDirectory();
     final path = p.join(
       directory.path,
-      'caption_pcm_${DateTime.now().millisecondsSinceEpoch}.wav',
+      '$_recordingPrefix${DateTime.now().millisecondsSinceEpoch}.wav',
     );
     _recordingPath = path;
+    _activeRecordingPaths.add(path);
 
     _chunkSubscription = recorderController.onAudioChunks.listen(onChunk);
     await recorderController.record(path: path, recorderSettings: recorderSettings);
@@ -73,6 +94,7 @@ class AudioRecorderService {
     final recordingPath = _recordingPath;
     _recordingPath = null;
     if (recordingPath != null) {
+      _activeRecordingPaths.remove(recordingPath);
       final recordingFile = File(recordingPath);
       if (await recordingFile.exists()) {
         await recordingFile.delete();
