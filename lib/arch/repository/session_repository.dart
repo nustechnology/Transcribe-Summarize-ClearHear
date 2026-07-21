@@ -14,6 +14,24 @@ abstract class SessionRepository {
     String language = 'auto',
   });
 
+  /// Creates an unsaved (is_saved = 0) draft session and returns its [id].
+  Future<int> createDraftSession({
+    required String title,
+    required int startedAt,
+    String language = 'auto',
+  });
+
+  /// Returns every unsaved (is_saved = 0) session, ordered by [started_at] ASC.
+  Future<List<SessionModel>> getUnsavedSessions();
+
+  /// Flips a draft to saved: sets [title], [endedAt], [durationSec], is_saved.
+  Future<void> markSessionSaved({
+    required int id,
+    required String title,
+    required int endedAt,
+    required int durationSec,
+  });
+
   /// Updates [endedAt] and [durationSec] when recording stops.
   Future<void> finishSession({
     required int id,

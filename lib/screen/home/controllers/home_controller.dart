@@ -19,6 +19,7 @@ import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
 import '../../../service/sherpa_onnx_service.dart';
 import '../../../shared/caption_size_config.dart';
+import '../../../shared/models/segment_model.dart';
 import '../../../shared/models/settings_model.dart';
 import '../../../util/session_segment_mapper.dart';
 import '../../../util/toast/app_toast.dart';
@@ -56,6 +57,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   bool _isSaveSheetVisible = false;
   bool _saveTranscriptsEnabled = SettingsModel.defaults().savingEnabled;
   final Set<int> _finalizedSegmentIds = {};
+  Future<int>? _draftSessionFuture;
+  final List<Future<void>> _pendingDraftWrites = [];
 
   final isCaptioning = false.obs;
   final transcript = ''.obs;
@@ -83,13 +86,14 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       _audioRecorderService.recorderController;
 
   LiveTranscriptService _createLiveTranscriptService() {
-    return _liveTranscriptService ??
+    final service = _liveTranscriptService ??
         LiveTranscriptService(
           audioRecorderService: _audioRecorderService,
           sherpaOnnxService: _sherpaOnnxService,
-          onPartialText: _handlePartialText,
-          onSegmentFinalized: _handleSegmentFinalized,
         );
+    service.onPartialText = _handlePartialText;
+    service.onSegmentFinalized = _handleSegmentFinalized;
+    return service;
   }
 
   String get formattedSessionDurationLabel {
@@ -167,6 +171,71 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         recordedAt: segment.recordedAt,
       ),
     );
+
+    final write = _persistSegmentToDraft(segment);
+    _pendingDraftWrites.add(write);
+    unawaited(write.whenComplete(() => _pendingDraftWrites.remove(write)));
+  }
+
+  Future<int?> _ensureDraftSession() async {
+    final sessionRepo = _sessionRepository;
+    final startedAt = _captioningStartedAt;
+    if (sessionRepo == null || startedAt == null) return null;
+
+    _draftSessionFuture ??= sessionRepo.createDraftSession(
+      title: _resolveSessionTitle(''),
+      startedAt: startedAt.millisecondsSinceEpoch ~/ 1000,
+    );
+    return _draftSessionFuture;
+  }
+
+  Future<void> _persistSegmentToDraft(ConversationSegment segment) async {
+    final segmentRepo = _segmentRepository;
+    final startedAt = _captioningStartedAt;
+    if (segmentRepo == null || startedAt == null) return;
+    if (!_saveTranscriptsEnabled) return;
+
+    try {
+      final sessionId = await _ensureDraftSession();
+      if (sessionId == null) return;
+
+      final offsetMs = segment.recordedAt.millisecondsSinceEpoch -
+          startedAt.millisecondsSinceEpoch;
+      final startMs = offsetMs < 0 ? 0 : offsetMs;
+
+      await segmentRepo.insertSegment(
+        SegmentModel(
+          sessionId: sessionId,
+          startMs: startMs,
+          endMs: startMs,
+          text: segment.displayText,
+          createdAt: segment.recordedAt.millisecondsSinceEpoch ~/ 1000,
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Draft persist failed: $error');
+      debugPrint('$stackTrace');
+    }
+  }
+
+  Future<void> _discardDraft() async {
+    final future = _draftSessionFuture;
+    _draftSessionFuture = null;
+    if (future == null) return;
+
+    final sessionRepo = _sessionRepository;
+    if (sessionRepo == null) return;
+
+    try {
+      if (_pendingDraftWrites.isNotEmpty) {
+        await Future.wait(List.of(_pendingDraftWrites));
+      }
+      final id = await future;
+      await sessionRepo.deleteSession(id);
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Draft discard failed: $error');
+      debugPrint('$stackTrace');
+    }
   }
 
   @override
@@ -264,6 +333,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       _resetLiveSessionState();
       partialTranscript.value = '';
       _finalizedSegmentIds.clear();
+      _draftSessionFuture = null;
       isFinishingTranscript.value = false;
       isPaused.value = false;
       isPausing.value = false;
@@ -389,6 +459,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   }
 
   void _promptTranscriptFinishError(TranscriptFinishError error) {
+    unawaited(_discardDraft());
     _clearPendingSaveState();
     _resetLiveSessionState();
     _captioningStartedAt = null;
@@ -400,6 +471,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   void discardPendingSession() {
     if (isSavingSession.value) return;
     showSaveSessionPrompt.value = false;
+    unawaited(_discardDraft());
     _resetLiveSessionState();
     _clearPendingSaveState();
     _captioningStartedAt = null;
@@ -426,15 +498,90 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
     isSavingSession.value = true;
 
-    int? sessionId;
     try {
       final resolvedTitle = _resolveSessionTitle(title);
       final startEpoch = startedAt.millisecondsSinceEpoch ~/ 1000;
       final durationSec = captioningElapsed.value.inSeconds;
       final endedAt = startEpoch + durationSec;
 
-      sessionId = await sessionRepo.createSession(
+      final promoted = await _promoteDraftToSaved(
+        sessionRepo: sessionRepo,
         title: resolvedTitle,
+        endedAt: endedAt,
+        durationSec: durationSec,
+      );
+
+      if (!promoted) {
+        await _saveAsNewSession(
+          sessionRepo: sessionRepo,
+          segmentRepo: segmentRepo,
+          startedAt: startedAt,
+          title: resolvedTitle,
+          startEpoch: startEpoch,
+          durationSec: durationSec,
+          endedAt: endedAt,
+        );
+      }
+
+      showSaveSessionPrompt.value = false;
+      _resetLiveSessionState();
+      _clearPendingSaveState();
+      _captioningStartedAt = null;
+      captioningElapsed.value = Duration.zero;
+
+      AppToast.success(
+        StringKeys.homeSaveSessionSuccess.tr,
+        subtitle: StringKeys.homeSaveSessionStoredNote.tr,
+      );
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Save session failed: $error');
+      debugPrint('$stackTrace');
+      AppToast.error(StringKeys.somethingWentWrong.tr);
+      return false;
+    } finally {
+      isSavingSession.value = false;
+    }
+  }
+
+  Future<bool> _promoteDraftToSaved({
+    required SessionRepository sessionRepo,
+    required String title,
+    required int endedAt,
+    required int durationSec,
+  }) async {
+    final future = _draftSessionFuture;
+    if (future == null) return false;
+
+    if (_pendingDraftWrites.isNotEmpty) {
+      await Future.wait(List.of(_pendingDraftWrites));
+    }
+
+    final draftId = await future;
+    await sessionRepo.markSessionSaved(
+      id: draftId,
+      title: title,
+      endedAt: endedAt,
+      durationSec: durationSec,
+    );
+    _draftSessionFuture = null;
+    return true;
+  }
+
+  Future<void> _saveAsNewSession({
+    required SessionRepository sessionRepo,
+    required SegmentRepository segmentRepo,
+    required DateTime startedAt,
+    required String title,
+    required int startEpoch,
+    required int durationSec,
+    required int endedAt,
+  }) async {
+    int? sessionId;
+    try {
+      sessionId = await sessionRepo.createSession(
+        title: title,
         startedAt: startEpoch,
       );
 
@@ -456,32 +603,18 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         await segmentRepo.insertSegments(segments);
       }
 
-      showSaveSessionPrompt.value = false;
-      _resetLiveSessionState();
-      _clearPendingSaveState();
-      _captioningStartedAt = null;
-      captioningElapsed.value = Duration.zero;
-
-      AppToast.success(
-        StringKeys.homeSaveSessionSuccess.tr,
-        subtitle: StringKeys.homeSaveSessionStoredNote.tr,
-      );
-
-      return true;
+      await _discardDraft();
     } catch (error, stackTrace) {
-      debugPrint('[Transcribe] Save session failed: $error');
+      debugPrint('[Transcribe] Save-as-new session failed: $error');
       debugPrint('$stackTrace');
       if (sessionId != null) {
         try {
           await sessionRepo.deleteSession(sessionId);
         } catch (_) {
-          debugPrint('[Transcribe] Delete session failed: $error');
+          debugPrint('[Transcribe] Delete session failed after save error');
         }
       }
-      AppToast.error(StringKeys.somethingWentWrong.tr);
-      return false;
-    } finally {
-      isSavingSession.value = false;
+      rethrow;
     }
   }
 

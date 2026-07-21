@@ -44,6 +44,30 @@ class _FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<int> createDraftSession({
+    required String title,
+    required int startedAt,
+    String language = 'auto',
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<SessionModel>> getUnsavedSessions() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> markSessionSaved({
+    required int id,
+    required String title,
+    required int endedAt,
+    required int durationSec,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<SearchResult>> searchSessions(String query, {int limit = 50}) {
     throw UnimplementedError();
   }

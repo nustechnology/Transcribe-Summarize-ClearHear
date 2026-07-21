@@ -39,6 +39,27 @@ class SessionRepositoryImpl implements SessionRepository {
     return id;
   }
 
+  @override
+  Future<int> createDraftSession({
+    required String title,
+    required int startedAt,
+    String language = 'auto',
+  }) async {
+    final db = await _db.database;
+    final id = await db.insert(
+      'sessions',
+      {
+        'title': title,
+        'started_at': startedAt,
+        'language': language,
+        'is_saved': 0,
+        'created_at': startedAt,
+      },
+    );
+    debugPrint('[SessionRepo] Created draft session id=$id');
+    return id;
+  }
+
   // ── UPDATE ─────────────────────────────────────────────────────────────────
 
   @override
@@ -56,6 +77,28 @@ class SessionRepositoryImpl implements SessionRepository {
     );
     debugPrint(
         '[SessionRepo] Finished session id=$id duration=${durationSec}s');
+  }
+
+  @override
+  Future<void> markSessionSaved({
+    required int id,
+    required String title,
+    required int endedAt,
+    required int durationSec,
+  }) async {
+    final db = await _db.database;
+    await db.update(
+      'sessions',
+      {
+        'title': title,
+        'ended_at': endedAt,
+        'duration_sec': durationSec,
+        'is_saved': 1,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    debugPrint('[SessionRepo] Marked session saved id=$id');
   }
 
   @override
@@ -97,6 +140,17 @@ class SessionRepositoryImpl implements SessionRepository {
     );
     if (rows.isEmpty) return null;
     return SessionModel.fromMap(rows.first);
+  }
+
+  @override
+  Future<List<SessionModel>> getUnsavedSessions() async {
+    final db = await _db.database;
+    final rows = await db.query(
+      'sessions',
+      where: 'is_saved = 0',
+      orderBy: 'started_at ASC',
+    );
+    return rows.map(SessionModel.fromMap).toList();
   }
 
   @override
@@ -198,6 +252,7 @@ class SessionRepositoryImpl implements SessionRepository {
         MAX(m.transcript_matched) AS transcript_matched
       FROM sessions s
       JOIN matched_sessions m ON s.id = m.id
+      WHERE s.is_saved = 1
       GROUP BY s.id
       ORDER BY s.started_at DESC
       LIMIT ?
