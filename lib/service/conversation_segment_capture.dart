@@ -14,12 +14,19 @@ class ConversationSegmentCapture {
     _nextId = 1;
   }
 
-  ConversationSegment commitSegment({String text = '', String wavPath = ''}) {
+  ConversationSegment commitSegment({
+    String text = '',
+    String wavPath = '',
+    int startMs = 0,
+    int endMs = 0,
+  }) {
     final segment = ConversationSegment(
       id: _nextId,
       wavPath: wavPath,
       asrText: text,
       recordedAt: DateTime.now(),
+      startMs: startMs,
+      endMs: endMs,
     );
     _nextId++;
     _segments.add(segment);

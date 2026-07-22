@@ -38,7 +38,10 @@ class HistoryBinding extends Bindings {
     }
     if (!Get.isRegistered<HistoryRepository>()) {
       Get.lazyPut<HistoryRepository>(
-        () => HistoryRepository(sessionRepository: Get.find()),
+        () => HistoryRepository(
+          sessionRepository: Get.find(),
+          segmentRepository: Get.find(),
+        ),
       );
     }
     Get.lazyPut<HistoryController>(

@@ -29,4 +29,9 @@ abstract class SegmentRepository {
   ///
   /// Normally handled by CASCADE, but exposed for targeted cleanup.
   Future<void> deleteSegments(int sessionId);
+
+  /// Counts distinct non-null `speaker_label` values for [sessionId].
+  ///
+  /// Returns 0 when no segments have been diarized yet.
+  Future<int> countDistinctSpeakers(int sessionId);
 }

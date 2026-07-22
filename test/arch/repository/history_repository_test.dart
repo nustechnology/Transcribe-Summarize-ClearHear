@@ -1,9 +1,45 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/history_repository.dart';
+import 'package:transcribe_summarize_clearhear/arch/repository/segment_repository.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/session_repository.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/search_result.dart';
+import 'package:transcribe_summarize_clearhear/shared/models/segment_model.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/session_model.dart';
 import 'package:transcribe_summarize_clearhear/shared/models/session_page_result.dart';
+
+class _FakeSegmentRepository implements SegmentRepository {
+  @override
+  Future<int> countDistinctSpeakers(int sessionId) async => 0;
+
+  @override
+  Future<void> deleteSegments(int sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<SegmentModel>> getSegments(int sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<SegmentModel>> getSegmentsPaged({
+    required int sessionId,
+    required int offset,
+    required int limit,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<int> insertSegment(SegmentModel segment) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> insertSegments(List<SegmentModel> segments) {
+    throw UnimplementedError();
+  }
+}
 
 class _FakeSessionRepository implements SessionRepository {
   _FakeSessionRepository(this.session);
@@ -111,6 +147,7 @@ void main() {
           createdAt: 1,
         ),
       ),
+      segmentRepository: _FakeSegmentRepository(),
     );
 
     final item = await repository.getSession('1');
@@ -133,6 +170,7 @@ void main() {
           createdAt: 1,
         ),
       ),
+      segmentRepository: _FakeSegmentRepository(),
     );
 
     final item = await repository.getSession('1');

@@ -45,6 +45,37 @@ abstract final class AppColors {
   // Private Badge
   static const privateBackground = Color(0xFFE8F7F3);
   static const privateGreen = Color(0xFF0F766E);
+
+  /// Distinct colors for speaker avatars / labels (cycled by speaker id).
+  static const speakerPalette = <Color>[
+    Color(0xFF1C5B5B), // teal
+    Color(0xFFC45C26), // terracotta
+    Color(0xFF3F51B5), // indigo
+    Color(0xFF7B1FA2), // purple
+    Color(0xFF00897B), // green-teal
+    Color(0xFFD81B60), // pink
+    Color(0xFF546E7A), // blue-grey
+    Color(0xFFEF6C00), // orange
+    Color(0xFF00695C), // dark teal
+    Color(0xFF5C6BC0), // soft indigo
+    Color(0xFF8D6E63), // brown
+    Color(0xFF039BE5), // light blue
+  ];
+
+  /// Stable color for a speaker label (same label → same color).
+  static Color colorForSpeaker(String? label) {
+    final trimmed = label?.trim() ?? '';
+    if (trimmed.isEmpty) return primary;
+
+    final numbered =
+        RegExp(r'^Speaker\s+(\d+)$', caseSensitive: false).firstMatch(trimmed);
+    if (numbered != null) {
+      final index = (int.parse(numbered.group(1)!) - 1) % speakerPalette.length;
+      return speakerPalette[index < 0 ? 0 : index];
+    }
+
+    return speakerPalette[trimmed.hashCode.abs() % speakerPalette.length];
+  }
 }
 
 class AppTheme {

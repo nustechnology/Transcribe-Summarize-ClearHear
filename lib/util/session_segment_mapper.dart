@@ -39,6 +39,7 @@ List<SegmentModel> mapConversationSegmentsToModels({
       endMs: endMs,
       text: segment.displayText,
       createdAt: createdAtEpoch,
+      speakerLabel: segment.speakerLabel,
     );
   });
 }
