@@ -90,10 +90,11 @@ class PrimaryActionButton extends GetView<HomeController> {
       final isAsrLoading = controller.isAsrModelLoading.value;
       final isStartDisabled =
           isProcessing || isAsrLoading || !controller.isAsrModelReady.value;
-      final downloadPct = (controller.asrModelDownloadProgress.value * 100)
-          .clamp(0, 100)
-          .round();
-      final loadingLabel = downloadPct > 0
+      final downloadProgress =
+          controller.asrModelDownloadProgress.value.clamp(0.0, 1.0).toDouble();
+      final downloadPct = (downloadProgress * 100).round();
+      final isDownloading = downloadProgress > 0.0 && downloadProgress < 1.0;
+      final loadingLabel = isDownloading
           ? '${StringKeys.homeLoadingModel.tr} $downloadPct%'
           : StringKeys.homeLoadingModel.tr;
 
@@ -104,7 +105,7 @@ class PrimaryActionButton extends GetView<HomeController> {
           labelText: isAsrLoading ? loadingLabel : null,
           icon: isAsrLoading ? Icons.download_rounded : Icons.mic,
           filled: true,
-          loadingDots: isAsrLoading && downloadPct == 0,
+          loadingDots: isAsrLoading && !isDownloading,
           onPressed: isStartDisabled ? null : controller.startCaptioning,
         ),
       );

@@ -152,29 +152,71 @@ class SherpaOnnxService {
 
   Future<void> _downloadAllFiles(Directory modelDir) async {
     const files = [
-      (MlModelConfig.asrEncoderFile, MlModelConfig.asrEncoderMinBytes),
-      (MlModelConfig.asrDecoderFile, MlModelConfig.asrDecoderMinBytes),
-      (MlModelConfig.asrJoinerFile, MlModelConfig.asrJoinerMinBytes),
-      (MlModelConfig.asrTokensFile, MlModelConfig.asrTokensMinBytes),
+      (
+        MlModelConfig.asrEncoderFile,
+        MlModelConfig.asrEncoderMinBytes,
+        MlModelConfig.asrEncoderBytes,
+      ),
+      (
+        MlModelConfig.asrDecoderFile,
+        MlModelConfig.asrDecoderMinBytes,
+        MlModelConfig.asrDecoderBytes,
+      ),
+      (
+        MlModelConfig.asrJoinerFile,
+        MlModelConfig.asrJoinerMinBytes,
+        MlModelConfig.asrJoinerBytes,
+      ),
+      (
+        MlModelConfig.asrTokensFile,
+        MlModelConfig.asrTokensMinBytes,
+        MlModelConfig.asrTokensBytes,
+      ),
     ];
 
-    for (final (file, minSize) in files) {
-      final target = File('${modelDir.path}/$file');
-      if (await target.exists() && await target.length() >= minSize) {
+    final pending = <(String, int, int)>[];
+    for (final entry in files) {
+      final target = File('${modelDir.path}/${entry.$1}');
+      if (await target.exists() && await target.length() >= entry.$2) {
         continue;
       }
-      await _downloadFile(file, target, minSize);
+      pending.add(entry);
+    }
+    if (pending.isEmpty) return;
+
+    // Progress is reported across every file that still needs downloading, so
+    // the UI sees a single 0 → 100% run instead of one run per file.
+    final totalBytes = pending.fold<int>(0, (sum, entry) => sum + entry.$3);
+    var completedBytes = 0;
+
+    for (final (file, minSize, expectedBytes) in pending) {
+      final target = File('${modelDir.path}/$file');
+      await _downloadFile(
+        file,
+        target,
+        minSize,
+        onBytes: (received) {
+          onDownloadProgress?.call(file, completedBytes + received, totalBytes);
+        },
+      );
+      completedBytes += expectedBytes;
+      onDownloadProgress?.call(file, completedBytes, totalBytes);
     }
   }
 
-  Future<void> _downloadFile(String fileName, File target, int minSize) async {
+  Future<void> _downloadFile(
+    String fileName,
+    File target,
+    int minSize, {
+    required void Function(int received) onBytes,
+  }) async {
     const maxRetries = 3;
     const initialDelay = Duration(seconds: 2);
     final partFile = File('${target.path}.part');
 
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await _downloadFileOnce(fileName, target, partFile, minSize);
+        await _downloadFileOnce(fileName, target, partFile, minSize, onBytes);
         return;
       } catch (e) {
         await _deleteIfExists(partFile);
@@ -194,6 +236,7 @@ class SherpaOnnxService {
     File target,
     File partFile,
     int minSize,
+    void Function(int received) onBytes,
   ) async {
     final url = Uri.parse('${MlModelConfig.hfBase}/$fileName');
     debugPrint('[SherpaOnnx] downloading $fileName from $url');
@@ -221,9 +264,7 @@ class SherpaOnnxService {
       try {
         await for (final chunk in response) {
           received += chunk.length;
-          if (total > 0) {
-            onDownloadProgress?.call(fileName, received, total);
-          }
+          onBytes(received);
           sink.add(chunk);
         }
 
