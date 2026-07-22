@@ -223,17 +223,16 @@ class SessionRepositoryImpl implements SessionRepository {
 
     final db = await _db.database;
     final ftsQuery = _buildFtsQuery(trimmed);
-    final likeQuery = '%$trimmed%';
-    AppLogger.info("[searchSessions] $likeQuery");
+    final likeQuery = '%${_escapeLike(trimmed)}%';
     final rows = await db.rawQuery('''
       WITH matched_sessions AS (
         SELECT
           id,
-          (title LIKE ?) AS title_matched,
-          (summary LIKE ?) AS summary_matched,
+          (title LIKE ? ESCAPE '\\') AS title_matched,
+          (summary LIKE ? ESCAPE '\\') AS summary_matched,
           0 AS transcript_matched
         FROM sessions
-        WHERE title LIKE ? OR summary LIKE ?
+        WHERE title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\'
 
         UNION ALL
 
@@ -257,11 +256,20 @@ class SessionRepositoryImpl implements SessionRepository {
       ORDER BY s.started_at DESC
       LIMIT ?
     ''', [likeQuery, likeQuery, likeQuery, likeQuery, ftsQuery, limit]);
-    AppLogger.info("[searchSessions] $likeQuery $rows");
+    AppLogger.info('[searchSessions] ${rows.length} results');
     return rows.map((row) {
       final session = SessionModel.fromMap(row);
       return SearchResult.fromMap(row, session);
     }).toList();
+  }
+
+  /// Escapes LIKE wildcards so a query containing `%` or `_` is matched
+  /// literally instead of being treated as a pattern.
+  String _escapeLike(String input) {
+    return input
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
   }
 
   /// Wraps each whitespace-delimited token in double quotes for FTS5 exact
