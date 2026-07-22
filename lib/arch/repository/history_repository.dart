@@ -4,6 +4,7 @@ import 'package:transcribe_summarize_clearhear/shared/models/history_search_hit.
 import 'package:transcribe_summarize_clearhear/shared/models/session_model.dart';
 import 'package:transcribe_summarize_clearhear/util/logger/app_logger.dart';
 
+import 'segment_repository.dart';
 import 'session_repository.dart';
 
 /// Adapter that bridges the existing [HistoryController] (which uses
@@ -15,10 +16,14 @@ import 'session_repository.dart';
 /// Migration path: once [HistoryController] is refactored to consume
 /// [SessionModel] directly, this adapter can be removed.
 class HistoryRepository {
-  HistoryRepository({required SessionRepository sessionRepository})
-      : _sessionRepository = sessionRepository;
+  HistoryRepository({
+    required SessionRepository sessionRepository,
+    required SegmentRepository segmentRepository,
+  })  : _sessionRepository = sessionRepository,
+        _segmentRepository = segmentRepository;
 
   final SessionRepository _sessionRepository;
+  final SegmentRepository _segmentRepository;
 
   /// Delegates to [SessionRepository.getAllSessions] and maps results to
   /// [HistoryItem] so the existing controller needs no changes.
@@ -32,7 +37,7 @@ class HistoryRepository {
         limit: limit,
         savedOnly: true,
       );
-      final items = result.items.map(_toHistoryItem).toList();
+      final items = await Future.wait(result.items.map(_toHistoryItem));
       return HistoryPageResult(items: items, hasMore: result.hasMore);
     } catch (error, stackTrace) {
       AppLogger.error(error: error, stackTrace: stackTrace);
@@ -46,7 +51,7 @@ class HistoryRepository {
       if (intId == null) return null;
       final session = await _sessionRepository.getSession(intId);
       if (session == null) return null;
-      return _toHistoryItem(session);
+      return await _toHistoryItem(session);
     } catch (error, stackTrace) {
       AppLogger.error(error: error, stackTrace: stackTrace);
       return null;
@@ -80,14 +85,14 @@ class HistoryRepository {
   Future<List<HistorySearchHit>> searchSessions(String query) async {
     try {
       final results = await _sessionRepository.searchSessions(query);
-      return results.map((result) {
+      return await Future.wait(results.map((result) async {
         return HistorySearchHit(
-          item: _toHistoryItem(result.session),
+          item: await _toHistoryItem(result.session),
           titleMatched: result.titleMatched,
           summaryMatched: result.summaryMatched,
           transcriptMatched: result.transcriptMatched,
         );
-      }).toList();
+      }));
     } catch (error, stackTrace) {
       AppLogger.error(error: error, stackTrace: stackTrace);
       return [];
@@ -96,9 +101,14 @@ class HistoryRepository {
 
   // ── Mapping ───────────────────────────────────────────────────────────────
 
-  static HistoryItem _toHistoryItem(SessionModel session) {
+  Future<HistoryItem> _toHistoryItem(SessionModel session) async {
     final status = session.summaryStatus;
     final snippet = _previewForSession(session);
+
+    final sessionId = session.id;
+    final distinctSpeakers = sessionId == null
+        ? 0
+        : await _segmentRepository.countDistinctSpeakers(sessionId);
 
     return HistoryItem(
       id: '${session.id}',
@@ -109,7 +119,7 @@ class HistoryRepository {
       snippet: snippet,
       summaryStatus: status,
       duration: session.durationSec ?? 0,
-      speakerCount: 1,
+      speakerCount: distinctSpeakers > 0 ? distinctSpeakers : 1,
       category: 'session',
     );
   }

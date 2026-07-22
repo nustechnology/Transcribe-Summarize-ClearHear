@@ -62,6 +62,7 @@ class SessionDetailController extends GetxController {
   final hasMoreSegments = true.obs;
 
   StreamSubscription<int>? _summaryUpdatesSub;
+  Future<void>? _loadDetailInFlight;
 
   int get _pageSize => 20;
 
@@ -104,9 +105,12 @@ class SessionDetailController extends GetxController {
   @override
   void onReady() {
     super.onReady();
+    // Prefer the constructor sessionId; only reload if onInit could not
+    // resolve an id yet (avoid concurrent loadDetail → duplicated rows).
     if (session.value == null &&
         sessionId == null &&
-        currentSessionId != null) {
+        currentSessionId != null &&
+        _loadDetailInFlight == null) {
       unawaited(loadDetail());
     }
   }
@@ -118,6 +122,21 @@ class SessionDetailController extends GetxController {
   }
 
   Future<void> loadDetail() async {
+    final existing = _loadDetailInFlight;
+    if (existing != null) return existing;
+
+    final future = _loadDetailBody();
+    _loadDetailInFlight = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_loadDetailInFlight, future)) {
+        _loadDetailInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _loadDetailBody() async {
     final id = currentSessionId;
     if (id == null) {
       errorMessage.value = StringKeys.somethingWentWrong.tr;
@@ -152,6 +171,7 @@ class SessionDetailController extends GetxController {
 
     segments.clear();
     hasMoreSegments.value = true;
+    isLoadingMore.value = false;
     await loadSegmentsPage();
     unawaited(_queueSummaryIfNeeded());
   }

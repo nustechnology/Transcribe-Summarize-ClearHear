@@ -54,3 +54,5 @@ app.*.map.json
 assets/models/sherpa-onnx-streaming-zipformer-en-2023-06-26/**
 !assets/models/sherpa-onnx-streaming-zipformer-en-2023-06-26/.gitkeep
 .fvm
+assets/models/speaker-embedding-models/**
+!assets/models/speaker-embedding-models/.gitkeep

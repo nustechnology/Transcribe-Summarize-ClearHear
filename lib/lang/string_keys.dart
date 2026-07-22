@@ -8,6 +8,7 @@ abstract class StringKeys {
   static const homeStatusIdle = 'home_status_idle';
   static const homeStatusPaused = 'home_status_paused';
   static const homeSpeakerLabel = 'home_speaker_label';
+  static const homeSpeakerUnknown = 'home_speaker_unknown';
   static const homeIdlePromptLine1 = 'home_idle_prompt_line1';
   static const homeIdlePromptLine2 = 'home_idle_prompt_line2';
   static const homeStartCaptioning = 'home_start_captioning';

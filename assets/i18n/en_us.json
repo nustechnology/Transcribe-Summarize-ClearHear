@@ -3,6 +3,7 @@
   "home_status_idle": "Idle",
   "home_status_paused": "Paused",
   "home_speaker_label": "Speaker 1",
+  "home_speaker_unknown": "Unknown",
   "home_idle_prompt_line1": "Tap Start captioning",
   "home_idle_prompt_line2": "to begin listening.",
   "home_start_captioning": "Start captioning",

@@ -74,6 +74,7 @@ flutter:
     - assets/i18n/
     - assets/models/
     - assets/models/sherpa-onnx-streaming-zipformer-en-2023-06-26/
+    - assets/models/speaker-embedding-models/
     - pubspec.yaml
 
   # An image asset can refer to one or more resolution-specific "variants", see

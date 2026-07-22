@@ -133,6 +133,9 @@ class _FakeSegmentRepository implements SegmentRepository {
 
   @override
   Future<void> deleteSegments(int sessionId) => throw UnimplementedError();
+
+  @override
+  Future<int> countDistinctSpeakers(int sessionId) async => 0;
 }
 
 SessionModel _draft({required int id, required int startedAt}) {

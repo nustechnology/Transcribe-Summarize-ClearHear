@@ -96,6 +96,25 @@ double rmsPcm16(Uint8List pcm) {
   return math.sqrt(sumSquares / sampleCount);
 }
 
+/// RMS energy of mono float32 samples in [-1, 1].
+double rmsFloat32(Float32List samples) {
+  if (samples.isEmpty) return 0;
+  var sumSquares = 0.0;
+  for (final sample in samples) {
+    sumSquares += sample * sample;
+  }
+  return math.sqrt(sumSquares / samples.length);
+}
+
+/// True when [samples] look like speech rather than silence/noise for
+/// speaker-embedding probes.
+bool hasSpeechEnergy(
+  Float32List samples, {
+  double minRms = 0.015,
+}) {
+  return rmsFloat32(samples) >= minRms;
+}
+
 double durationSecondsForPcm16(
   int byteLength, {
   int sampleRate = 16000,

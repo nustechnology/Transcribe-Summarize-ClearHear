@@ -91,4 +91,20 @@ class SegmentRepositoryImpl implements SegmentRepository {
       '[SegmentRepo] Deleted $count segments for session=$sessionId',
     );
   }
+
+  // ── AGGREGATE ────────────────────────────────────────────────────────────
+
+  @override
+  Future<int> countDistinctSpeakers(int sessionId) async {
+    final db = await _db.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT speaker_label) AS count
+      FROM segments
+      WHERE session_id = ? AND speaker_label IS NOT NULL
+      ''',
+      [sessionId],
+    );
+    return (rows.first['count'] as int?) ?? 0;
+  }
 }
