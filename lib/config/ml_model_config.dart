@@ -30,6 +30,15 @@ abstract final class MlModelConfig {
   static const asrJoinerMinBytes = 100 * 1024;
   static const asrTokensMinBytes = 1024;
 
+  /// Download size of each model file, used to report one combined progress
+  /// across all files instead of restarting the bar per file.
+  /// Measured sizes: encoder 71,082,637 B · decoder 1,307,236 B ·
+  /// joiner 259,335 B · tokens 5,048 B (total ≈ 0.3% below the values below).
+  static const asrEncoderBytes = 68 * 1024 * 1024;
+  static const asrDecoderBytes = 1277 * 1024;
+  static const asrJoinerBytes = 253 * 1024;
+  static const asrTokensBytes = 5 * 1024;
+
   /// Number of threads for sherpa-onnx decoding.
   static int get asrThreads => Platform.isAndroid ? 1 : 2;
 
