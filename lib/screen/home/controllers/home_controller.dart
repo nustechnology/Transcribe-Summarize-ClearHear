@@ -289,12 +289,11 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     isAsrModelReady.value = false;
     asrModelDownloadProgress.value = 0;
     _sherpaOnnxService.onDownloadProgress = (_, received, total) {
-      if (total <= 0) {
-        asrModelDownloadProgress.value = 0.0;
-        return;
+      if (total <= 0) return;
+      final progress = (received / total).clamp(0.0, 1.0).toDouble();
+      if (progress > asrModelDownloadProgress.value) {
+        asrModelDownloadProgress.value = progress;
       }
-      final progress = (received / total).clamp(0.0, 1.0);
-      asrModelDownloadProgress.value = progress.toDouble();
     };
     try {
       await _sherpaOnnxService.ensureModelReady();
