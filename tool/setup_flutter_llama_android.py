@@ -99,11 +99,23 @@ message(STATUS "   Vulkan/OpenCL disabled for Android NDK compatibility")"""
         android_build_gradle = plugin_dir / "android" / "build.gradle"
         if android_build_gradle.is_file():
             gradle_text = android_build_gradle.read_text(encoding="utf-8")
-            if cmake_version_old in gradle_text:
-                android_build_gradle.write_text(
-                    gradle_text.replace(cmake_version_old, cmake_version_new, 1),
-                    encoding="utf-8",
+            gradle_patched = False
+
+            # flutter_llama 1.1.2 defaults to arm64-v8a only, but devices may be 32-bit.
+            # Expand ABI list to include armeabi-v7a so native libs are built for both.
+            abi_single = "abiFilters 'arm64-v8a'"
+            abi_both = "abiFilters 'arm64-v8a', 'armeabi-v7a'"
+            if abi_single in gradle_text and abi_both not in gradle_text:
+                gradle_text = gradle_text.replace(abi_single, abi_both, 1)
+                gradle_patched = True
+                print(
+                    f"Patched: {android_build_gradle} "
+                    f"(abiFilters arm64-v8a -> arm64-v8a + armeabi-v7a)"
                 )
+
+            if cmake_version_old in gradle_text:
+                gradle_text = gradle_text.replace(cmake_version_old, cmake_version_new, 1)
+                gradle_patched = True
                 print(
                     f"Patched: {android_build_gradle} "
                     f"(cmake {cmake_version_old} -> {cmake_version_new})"
@@ -113,6 +125,9 @@ message(STATUS "   Vulkan/OpenCL disabled for Android NDK compatibility")"""
                     f"WARNING: cmake version pin not found in {android_build_gradle}; "
                     f"CMake {cmake_version_new} override was NOT applied."
                 )
+
+            if gradle_patched:
+                android_build_gradle.write_text(gradle_text, encoding="utf-8")
 
         cmake_lists = plugin_dir / "android" / "src" / "main" / "cpp" / "CMakeLists.txt"
         if cmake_lists.is_file():
@@ -129,6 +144,50 @@ message(STATUS "   Vulkan/OpenCL disabled for Android NDK compatibility")"""
                         encoding="utf-8",
                     )
                     print(f"Patched: {cmake_lists} (CPU-only backend)")
+
+        # Prevent the companion object from silently swallowing native-load errors.
+        # Without this, library-load failures produce a cryptic UnsatisfiedLinkError
+        # much later (e.g. on the summary screen) instead of failing fast at startup.
+        plugin_kt = (
+            plugin_dir
+            / "android"
+            / "src"
+            / "main"
+            / "kotlin"
+            / "net"
+            / "nativemind"
+            / "flutter_llama"
+            / "FlutterLlamaPlugin.kt"
+        )
+        kt_marker = "PATCHED_CLEARHEAR_FAILFAST_COMPANION"
+        if plugin_kt.is_file():
+            kt_text = plugin_kt.read_text(encoding="utf-8")
+            if kt_marker not in kt_text:
+                kt_old = (
+                    '            } catch (e: UnsatisfiedLinkError) {\n'
+                    '                Log.e(TAG, "Failed to load native libraries: ${e.message}")\n'
+                    '            }'
+                )
+                kt_new = (
+                    '            // {kt_marker}\n'
+                    '            }} catch (e: UnsatisfiedLinkError) {{\n'
+                    '                Log.e(TAG, "Failed to load native libraries: ${{e.message}}", e)\n'
+                    '                throw RuntimeException(\n'
+                    '                    "FlutterLlamaPlugin cannot load native libraries "\n'
+                    '                        + "(device ABI: ${{android.os.Build.SUPPORTED_ABIS.joinToString()}}). "\n'
+                    '                        + "Required: arm64-v8a or armeabi-v7a.",\n'
+                    '                    e,\n'
+                    '                )\n'
+                    '            }}'.format(kt_marker=kt_marker)
+                )
+                if kt_old in kt_text:
+                    plugin_kt.write_text(kt_text.replace(kt_old, kt_new, 1), encoding="utf-8")
+                    print(f"Patched: {plugin_kt} (fail-fast companion init)")
+                else:
+                    print(
+                        f"WARNING: companion-init anchor not found in {plugin_kt}; "
+                        "fail-fast patch was NOT applied."
+                    )
 
     def read_upstream(path: str) -> str:
         local_path = third_party_llama / path
@@ -191,6 +250,113 @@ message(STATUS "   Vulkan/OpenCL disabled for Android NDK compatibility")"""
             if updated != text:
                 context_cpp.write_text(updated, encoding="utf-8")
                 print(f"Patched: {context_cpp}")
+
+        # sgemm.cpp uses ARM FP16 intrinsics (vld1q_f16) that only exist on
+        # AArch64.  Without the guard the project fails to compile for armeabi-v7a.
+        sgemm_cpp = root / "ggml" / "src" / "ggml-cpu" / "llamafile" / "sgemm.cpp"
+        sgemm_marker = "PATCHED_CLEARHEAR_ARM_FP16_GUARD"
+        sgemm_marker_v2 = "PATCHED_CLEARHEAR_ARM_FP16_GUARD_V2"
+        sgemm_marker_v3 = "PATCHED_CLEARHEAR_ARM_FP16_GUARD_V3"
+        if sgemm_cpp.is_file():
+            sgemm_text = sgemm_cpp.read_text(encoding="utf-8")
+
+            upgrade_applied = False
+            # v1 -> v3: replace too-strict __ARM_FEATURE_FP16_VECTOR_ARITHMETIC with __aarch64__
+            if sgemm_marker in sgemm_text and sgemm_marker_v2 not in sgemm_text and sgemm_marker_v3 not in sgemm_text:
+                sgemm_text = sgemm_text.replace(
+                    '#if !defined(_MSC_VER) && defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC) '
+                    f'// {sgemm_marker}\n',
+                    '#if !defined(_MSC_VER) && defined(__aarch64__) '
+                    f'// {sgemm_marker_v2}\n',
+                    1,
+                )
+                upgrade_applied = True
+                print(f"Upgraded: {sgemm_cpp} (FP16 guard v1 -> v2)")
+
+            if sgemm_marker_v3 not in sgemm_text:
+                if sgemm_marker_v2 in sgemm_text:
+                    # v2 -> v3: add armeabi-v7a fallback with GGML_CPU_FP16_TO_FP32
+                    sgemm_v2_old = (
+                        '#if !defined(_MSC_VER) && defined(__aarch64__) '
+                        f'// {sgemm_marker_v2}\n'
+                        'template <> inline float16x8_t load(const ggml_fp16_t *p) {\n'
+                        '    return vld1q_f16((const float16_t *)p);\n'
+                        '}\n'
+                        'template <> inline float32x4_t load(const ggml_fp16_t *p) {\n'
+                        '    return vcvt_f32_f16(vld1_f16((const float16_t *)p));\n'
+                        '}\n'
+                        '#endif // _MSC_VER\n'
+                    )
+                    sgemm_v2_new = (
+                        '#if !defined(_MSC_VER) && defined(__aarch64__) '
+                        f'// {sgemm_marker_v3}\n'
+                        'template <> inline float16x8_t load(const ggml_fp16_t *p) {\n'
+                        '    return vld1q_f16((const float16_t *)p);\n'
+                        '}\n'
+                        'template <> inline float32x4_t load(const ggml_fp16_t *p) {\n'
+                        '    return vcvt_f32_f16(vld1_f16((const float16_t *)p));\n'
+                        '}\n'
+                        '#elif !defined(_MSC_VER) && defined(__ARM_NEON) && !defined(__aarch64__)\n'
+                        'template <> inline float32x4_t load(const ggml_fp16_t *p) {\n'
+                        '    float tmp[4];\n'
+                        '    for (int i = 0; i < 4; i++) {\n'
+                        '        tmp[i] = GGML_CPU_FP16_TO_FP32(p[i]);\n'
+                        '    }\n'
+                        '    return vld1q_f32(tmp);\n'
+                        '}\n'
+                        '#endif // _MSC_VER\n'
+                    )
+                    if sgemm_v2_old in sgemm_text:
+                        sgemm_text = sgemm_text.replace(sgemm_v2_old, sgemm_v2_new, 1)
+                        upgrade_applied = True
+                        print(f"Upgraded: {sgemm_cpp} (FP16 guard v2 -> v3)")
+                    else:
+                        print(f"WARNING: v2 anchor not found in {sgemm_cpp}; v2->v3 upgrade skipped")
+                elif sgemm_marker not in sgemm_text:
+                    # fresh patch v3 from original
+                    sgemm_orig_old = (
+                        '#if !defined(_MSC_VER)\n'
+                        '// FIXME: this should check for __ARM_FEATURE_FP16_VECTOR_ARITHMETIC\n'
+                        'template <> inline float16x8_t load(const ggml_fp16_t *p) {\n'
+                        '    return vld1q_f16((const float16_t *)p);\n'
+                        '}\n'
+                        'template <> inline float32x4_t load(const ggml_fp16_t *p) {\n'
+                        '    return vcvt_f32_f16(vld1_f16((const float16_t *)p));\n'
+                        '}\n'
+                        '#endif // _MSC_VER\n'
+                    )
+                    sgemm_orig_new = (
+                        '// PATCHED_CLEARHEAR_ARM_FP16_ORIG_FIXME_ADDRESSED\n'
+                        '#if !defined(_MSC_VER) && defined(__aarch64__) '
+                        f'// {sgemm_marker_v3}\n'
+                        'template <> inline float16x8_t load(const ggml_fp16_t *p) {\n'
+                        '    return vld1q_f16((const float16_t *)p);\n'
+                        '}\n'
+                        'template <> inline float32x4_t load(const ggml_fp16_t *p) {\n'
+                        '    return vcvt_f32_f16(vld1_f16((const float16_t *)p));\n'
+                        '}\n'
+                        '#elif !defined(_MSC_VER) && defined(__ARM_NEON) && !defined(__aarch64__)\n'
+                        'template <> inline float32x4_t load(const ggml_fp16_t *p) {\n'
+                        '    float tmp[4];\n'
+                        '    for (int i = 0; i < 4; i++) {\n'
+                        '        tmp[i] = GGML_CPU_FP16_TO_FP32(p[i]);\n'
+                        '    }\n'
+                        '    return vld1q_f32(tmp);\n'
+                        '}\n'
+                        '#endif // _MSC_VER\n'
+                    )
+                    if sgemm_orig_old in sgemm_text:
+                        sgemm_text = sgemm_text.replace(sgemm_orig_old, sgemm_orig_new, 1)
+                        upgrade_applied = True
+                        print(f"Patched: {sgemm_cpp} (armeabi-v7a FP16 guard v3)")
+                    else:
+                        print(
+                            f"WARNING: sgemm anchor not found in {sgemm_cpp}; "
+                            "armeabi-v7a FP16 guard was NOT applied."
+                        )
+
+            if upgrade_applied:
+                sgemm_cpp.write_text(sgemm_text, encoding="utf-8")
 
         cxx_dir = root.parent / "android" / ".cxx"
         if cxx_dir.exists():
