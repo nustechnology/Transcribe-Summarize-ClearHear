@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audio_waveforms/audio_waveforms.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
@@ -18,6 +19,7 @@ import '../../../service/foreground_service_handler.dart';
 import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
 import '../../../service/sherpa_onnx_service.dart';
+import '../../../service/speaker_diarization_service.dart';
 import '../../../shared/caption_size_config.dart';
 import '../../../shared/models/segment_model.dart';
 import '../../../shared/models/settings_model.dart';
@@ -28,6 +30,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   HomeController({
     SettingsRepository? settingsRepository,
     SherpaOnnxService? sherpaOnnxService,
+    SpeakerDiarizationService? speakerDiarizationService,
     LlamaService? llamaService,
     AudioRecorderService? audioRecorderService,
     LiveTranscriptService? liveTranscriptService,
@@ -35,6 +38,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     SegmentRepository? segmentRepository,
   })  : _settingsRepository = settingsRepository,
         _sherpaOnnxService = sherpaOnnxService ?? SherpaOnnxService(),
+        _speakerDiarizationService =
+            speakerDiarizationService ?? SpeakerDiarizationService(),
         _llamaService = llamaService ?? LlamaService(),
         _audioRecorderService = audioRecorderService ?? AudioRecorderService(),
         _liveTranscriptService = liveTranscriptService,
@@ -43,6 +48,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   final SettingsRepository? _settingsRepository;
   final SherpaOnnxService _sherpaOnnxService;
+  final SpeakerDiarizationService _speakerDiarizationService;
   final LlamaService _llamaService;
   final AudioRecorderService _audioRecorderService;
   final LiveTranscriptService? _liveTranscriptService;
@@ -60,10 +66,18 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   Future<int>? _draftSessionFuture;
   final List<Future<void>> _pendingDraftWrites = [];
 
+  /// When false, live draft segment inserts are ignored (stop/save in progress).
+  bool _draftPersistsEnabled = true;
+
   final isCaptioning = false.obs;
   final transcript = ''.obs;
   final transcriptSegments = <TranscriptSegmentEntry>[].obs;
   final partialTranscript = ''.obs;
+
+  /// Speaker label for the utterance currently being transcribed; null
+  /// means "not yet determined" (shown as "Unknown" while enough audio is
+  /// still being gathered for a reliable embedding).
+  final partialSpeakerLabel = Rxn<String>();
   final summary = ''.obs;
   final isProcessing = false.obs;
   final isPausing = false.obs;
@@ -90,6 +104,10 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         LiveTranscriptService(
           audioRecorderService: _audioRecorderService,
           sherpaOnnxService: _sherpaOnnxService,
+          speakerDiarizationService: _speakerDiarizationService,
+          onPartialText: _handlePartialText,
+          onPartialSpeakerLabel: _handlePartialSpeakerLabel,
+          onSegmentFinalized: _handleSegmentFinalized,
         );
     service.onPartialText = _handlePartialText;
     service.onSegmentFinalized = _handleSegmentFinalized;
@@ -161,6 +179,10 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     partialTranscript.value = text;
   }
 
+  void _handlePartialSpeakerLabel(String? label) {
+    partialSpeakerLabel.value = label;
+  }
+
   void _handleSegmentFinalized(ConversationSegment segment) {
     if (!_finalizedSegmentIds.add(segment.id)) return;
     if (segment.displayText.isEmpty) return;
@@ -169,6 +191,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       TranscriptSegmentEntry(
         text: segment.displayText,
         recordedAt: segment.recordedAt,
+        speakerLabel: segment.speakerLabel,
       ),
     );
 
@@ -190,6 +213,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> _persistSegmentToDraft(ConversationSegment segment) async {
+    if (!_draftPersistsEnabled) return;
     final segmentRepo = _segmentRepository;
     final startedAt = _captioningStartedAt;
     if (segmentRepo == null || startedAt == null) return;
@@ -197,7 +221,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
     try {
       final sessionId = await _ensureDraftSession();
-      if (sessionId == null) return;
+      if (sessionId == null || !_draftPersistsEnabled) return;
 
       final offsetMs = segment.recordedAt.millisecondsSinceEpoch -
           startedAt.millisecondsSinceEpoch;
@@ -210,6 +234,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
           endMs: startMs,
           text: segment.displayText,
           createdAt: segment.recordedAt.millisecondsSinceEpoch ~/ 1000,
+          speakerLabel: segment.speakerLabel,
         ),
       );
     } catch (error, stackTrace) {
@@ -334,6 +359,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       partialTranscript.value = '';
       _finalizedSegmentIds.clear();
       _draftSessionFuture = null;
+      _draftPersistsEnabled = true;
       isFinishingTranscript.value = false;
       isPaused.value = false;
       isPausing.value = false;
@@ -376,6 +402,10 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   Future<void> stopCaptioning() async {
     if (!isCaptioning.value || isFinishingTranscript.value) return;
 
+    // Stop accepting draft writes before flush/finalize so late inserts
+    // cannot race with save's delete+reinsert and duplicate rows.
+    _draftPersistsEnabled = false;
+
     isFinishingTranscript.value = true;
     isCaptioning.value = false;
     summary.value = '';
@@ -383,6 +413,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     isPaused.value = false;
     isPausing.value = false;
     partialTranscript.value = '';
+    partialSpeakerLabel.value = null;
     _stopDurationTimer();
     _resetCaptionFontSize();
 
@@ -393,9 +424,12 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
     if (liveTranscript == null) {
       debugPrint('[Transcribe] Stop failed: live transcript not active');
+      isFinishingTranscript.value = false;
       return;
     }
 
+    // Let the stop loading indicator mount/paint before finish work starts.
+    await Future<void>.delayed(Duration.zero);
     _scheduleFinish(liveTranscript);
   }
 
@@ -422,24 +456,23 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   Future<void> _finishInBackground(LiveTranscriptService liveTranscript) async {
     statusMessage.value = '';
     try {
+      // Fast path: flush ASR only so the stop spinner can paint/animate.
       final result = await liveTranscript.finish();
       _applyTranscriptResult(result);
-      debugPrint(
-        '[Transcribe] Stop complete '
-        '(${result.segments.length} segments, asr=${result.usedAsr})',
-      );
-      debugPrint('[Transcribe] ASR text:\n${result.text}');
-      for (final segment in result.segments) {
-        debugPrint(
-          '[Transcribe] segment ${segment.id} '
-          'asr="${segment.asrText}"',
-        );
-      }
+
+      isFinishingTranscript.value = false;
+
+      // Re-label from retained PCM after unlocking the UI. Yields between
+      // segments so Cam++ does not freeze the isolate; clears audioSamples
+      // when finished.
+      final refined = await liveTranscript.refineSpeakerLabels();
+      _applyTranscriptResult(refined);
+
       final hasVisibleTranscript =
-          transcriptSegments.isNotEmpty || result.text.trim().isNotEmpty;
+          transcriptSegments.isNotEmpty || refined.text.trim().isNotEmpty;
       if (!hasVisibleTranscript) {
         _promptTranscriptFinishError(
-          result.segments.isEmpty
+          refined.segments.isEmpty
               ? TranscriptFinishError.tooShort
               : TranscriptFinishError.unrecognized,
         );
@@ -447,6 +480,20 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         showSaveSessionPrompt.value = true;
       } else {
         _clearPendingSaveState();
+      }
+
+      debugPrint(
+        '[Transcribe] Stop complete '
+        '(${refined.segments.length} segments, asr=${refined.usedAsr})',
+      );
+      if (kDebugMode) {
+        debugPrint('[Transcribe] ASR text:\n${refined.text}');
+        for (final segment in refined.segments) {
+          debugPrint(
+            '[Transcribe] segment ${segment.id} '
+            'asr="${segment.asrText}" speaker=${segment.speakerLabel}',
+          );
+        }
       }
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Stop failed: $error');
@@ -497,6 +544,10 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     }
 
     isSavingSession.value = true;
+    // Let the sheet save spinner paint before DB work.
+    await Future<void>.delayed(Duration.zero);
+    // Finish any in-flight stop work so save doesn't contend with dispose.
+    await _awaitPendingFinish();
 
     try {
       final resolvedTitle = _resolveSessionTitle(title);
@@ -506,6 +557,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
       final promoted = await _promoteDraftToSaved(
         sessionRepo: sessionRepo,
+        segmentRepo: segmentRepo,
+        startedAt: startedAt,
         title: resolvedTitle,
         endedAt: endedAt,
         durationSec: durationSec,
@@ -547,6 +600,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   Future<bool> _promoteDraftToSaved({
     required SessionRepository sessionRepo,
+    required SegmentRepository segmentRepo,
+    required DateTime startedAt,
     required String title,
     required int endedAt,
     required int durationSec,
@@ -554,11 +609,38 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     final future = _draftSessionFuture;
     if (future == null) return false;
 
+    _draftPersistsEnabled = false;
+    if (_pendingDraftWrites.isNotEmpty) {
+      await Future.wait(List.of(_pendingDraftWrites));
+    }
+    // Drain any write that started just before the flag flipped.
     if (_pendingDraftWrites.isNotEmpty) {
       await Future.wait(List.of(_pendingDraftWrites));
     }
 
     final draftId = await future;
+
+    // Always replace draft rows with the in-memory finalized set so we never
+    // keep live draft inserts alongside the save payload (duplicates).
+    await segmentRepo.deleteSegments(draftId);
+    final segments = mapConversationSegmentsToModels(
+      segments: _pendingSaveSegments,
+      sessionId: draftId,
+      sessionStartedAt: startedAt,
+      durationSec: durationSec,
+      createdAtEpoch: endedAt,
+    );
+    if (segments.isNotEmpty) {
+      const chunkSize = 40;
+      for (var i = 0; i < segments.length; i += chunkSize) {
+        await Future<void>.delayed(Duration.zero);
+        final end = i + chunkSize < segments.length
+            ? i + chunkSize
+            : segments.length;
+        await segmentRepo.insertSegments(segments.sublist(i, end));
+      }
+    }
+
     await sessionRepo.markSessionSaved(
       id: draftId,
       title: title,
@@ -600,7 +682,14 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       );
 
       if (segments.isNotEmpty) {
-        await segmentRepo.insertSegments(segments);
+        const chunkSize = 40;
+        for (var i = 0; i < segments.length; i += chunkSize) {
+          await Future<void>.delayed(Duration.zero);
+          final end = i + chunkSize < segments.length
+              ? i + chunkSize
+              : segments.length;
+          await segmentRepo.insertSegments(segments.sublist(i, end));
+        }
       }
 
       await _discardDraft();
@@ -649,6 +738,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     transcript.value = '';
     transcriptSegments.clear();
     partialTranscript.value = '';
+    partialSpeakerLabel.value = null;
     _finalizedSegmentIds.clear();
   }
 
@@ -682,6 +772,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     isPaused.value = true;
     isPausing.value = true;
     partialTranscript.value = '';
+    partialSpeakerLabel.value = null;
     _stopDurationTimer();
     statusMessage.value = '';
 
@@ -824,6 +915,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
     await _audioRecorderService.dispose();
     await _sherpaOnnxService.dispose();
+    await _speakerDiarizationService.dispose();
   }
 }
 

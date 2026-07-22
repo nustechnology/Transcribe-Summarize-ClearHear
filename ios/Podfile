@@ -3,6 +3,13 @@ platform :ios, '15.6'
 
 require 'fileutils'
 
+def patch_flutter_llama_swift_bridge!
+  script = File.expand_path(File.join('..', 'tool', 'patch_flutter_llama_ios.py'), __dir__)
+  return unless File.exist?(script)
+
+  system('python3', script) || raise("patch_flutter_llama_ios.py failed")
+end
+
 # flutter_llama on pub.dev ships static libs but omits llama.cpp headers.
 # Copy them from the bundled xcframework before Xcode compiles the plugin.
 def patch_flutter_llama_headers!
@@ -123,6 +130,11 @@ def patch_flutter_llama_swift_string_bridge!
   return unless File.exist?(file_path)
 
   content = File.read(file_path)
+
+  # tool/patch_flutter_llama_ios.py applies the same fix with its own marker;
+  # if it already ran, the original code blocks below no longer exist.
+  return if content.include?('PATCHED_FOR_CLEARHEAR_SWIFT_CSTRING')
+
   decl_patched = false
 
   # ------------------------------------------------------------------
@@ -462,6 +474,7 @@ patch_flutter_llama_podspec!
 
 pre_install do |_installer|
   patch_flutter_llama_headers!
+  patch_flutter_llama_swift_bridge!
 end
 
 target 'Runner' do
@@ -478,6 +491,7 @@ end
 
 post_install do |installer|
   patch_flutter_llama_headers!
+  patch_flutter_llama_swift_bridge!
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|

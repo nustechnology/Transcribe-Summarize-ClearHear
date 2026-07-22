@@ -29,6 +29,9 @@ class SherpaOnnxService {
     if (_disposed) {
       throw StateError('SherpaOnnxService has been disposed');
     }
+    // Stay loaded across captioning sessions — recreating OnlineRecognizer on
+    // every Start re-reads ~70MB+ of ONNX and stalls the waveform 1–2s.
+    if (_modelReady) return;
     return _loading ??= _loadModel();
   }
 
@@ -292,9 +295,22 @@ class SherpaOnnxService {
   }
 
   String finalizeStream(OnlineStream stream) {
+    return finalizeStreamResult(stream).text;
+  }
+
+  /// Like [finalizeStream], but keeps token timestamps for splitting text
+  /// at a mid-utterance speaker-change cut.
+  AsrUtteranceResult finalizeStreamResult(OnlineStream stream) {
+    while (_recognizer!.isReady(stream)) {
+    _recognizer!.decode(stream);
+    }
     final result = _recognizer!.getResult(stream);
     _recognizer!.reset(stream);
-    return formatAsrText(result.text);
+    return AsrUtteranceResult(
+      text: formatAsrText(result.text),
+      tokens: List<String>.from(result.tokens),
+      timestamps: List<double>.from(result.timestamps),
+    );
   }
 
   void _ensureReady() {
@@ -316,4 +332,18 @@ class SherpaOnnxService {
     _modelReady = false;
     _loading = null;
   }
+}
+
+/// Streaming ASR result with optional per-token timestamps (seconds from
+/// utterance start), used to split text at a mid-utterance speaker cut.
+class AsrUtteranceResult {
+  const AsrUtteranceResult({
+    required this.text,
+    this.tokens = const [],
+    this.timestamps = const [],
+  });
+
+  final String text;
+  final List<String> tokens;
+  final List<double> timestamps;
 }

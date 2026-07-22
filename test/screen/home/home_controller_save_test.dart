@@ -132,7 +132,12 @@ class _FakeSegmentRepository implements SegmentRepository {
       throw UnimplementedError();
 
   @override
-  Future<void> deleteSegments(int sessionId) => throw UnimplementedError();
+  Future<void> deleteSegments(int sessionId) async {
+    inserted.removeWhere((s) => s.sessionId == sessionId);
+  }
+
+  @override
+  Future<int> countDistinctSpeakers(int sessionId) async => 0;
 }
 
 class _FakeSettingsRepository implements SettingsRepository {

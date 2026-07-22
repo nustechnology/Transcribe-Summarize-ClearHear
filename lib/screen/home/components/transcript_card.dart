@@ -95,6 +95,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
       final transcript = controller.transcript.value;
       final transcriptSegments = controller.transcriptSegments.toList();
       final partialTranscript = controller.partialTranscript.value;
+      final partialSpeakerLabel = controller.partialSpeakerLabel.value;
       final summary = controller.summary.value.trim();
       final statusMessage = controller.statusMessage.value;
       final fontSize = controller.transcriptFontSize.value;
@@ -135,6 +136,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
           transcript: transcript,
           transcriptSegments: transcriptSegments,
           partialTranscript: partialTranscript,
+          partialSpeakerLabel: partialSpeakerLabel,
           summary: summary,
           statusMessage: statusMessage,
           fontSize: fontSize,
@@ -165,6 +167,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     required String transcript,
     required List<TranscriptSegmentEntry> transcriptSegments,
     required String partialTranscript,
+    required String? partialSpeakerLabel,
     required String summary,
     required String statusMessage,
     required double fontSize,
@@ -194,6 +197,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
         transcript: transcript,
         transcriptSegments: transcriptSegments,
         partialTranscript: partialTranscript,
+        partialSpeakerLabel: partialSpeakerLabel,
         summary: summary,
         fontSize: fontSize,
         pausedDuration: pausedDuration,
@@ -265,6 +269,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
     required String transcript,
     required List<TranscriptSegmentEntry> transcriptSegments,
     required String partialTranscript,
+    required String? partialSpeakerLabel,
     required String summary,
     required double fontSize,
     required String pausedDuration,
@@ -286,8 +291,6 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _SpeakerBadge(),
-                  const SizedBox(height: 12),
                   _TranscriptSegmentsView(
                     transcript: transcript,
                     transcriptSegments: transcriptSegments,
@@ -307,8 +310,6 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SpeakerBadge(),
-          const SizedBox(height: 12),
           if (isProcessing && summary.isEmpty)
             Text(
               StringKeys.homeProcessing.tr,
@@ -324,6 +325,7 @@ class _TranscriptCardBodyState extends State<_TranscriptCardBody> {
               transcript: transcript,
               transcriptSegments: transcriptSegments,
               partialTranscript: partialTranscript,
+              partialSpeakerLabel: partialSpeakerLabel,
               fontSize: fontSize,
               showProcessingTail: isFinishingTranscript,
               showListeningWhenEmpty: isCaptioning && !isPaused,
@@ -361,6 +363,7 @@ class _TranscriptSegmentsView extends StatelessWidget {
     required this.transcriptSegments,
     required this.fontSize,
     this.partialTranscript = '',
+    this.partialSpeakerLabel,
     this.showProcessingTail = false,
     this.showListeningWhenEmpty = false,
   });
@@ -369,6 +372,11 @@ class _TranscriptSegmentsView extends StatelessWidget {
   final List<TranscriptSegmentEntry> transcriptSegments;
   final double fontSize;
   final String partialTranscript;
+
+  /// Speaker label for the in-progress utterance; null means "not yet
+  /// determined" and is shown as "Unknown" rather than hidden, so the
+  /// badge is always present the moment speech starts (Teams-style).
+  final String? partialSpeakerLabel;
   final bool showProcessingTail;
   final bool showListeningWhenEmpty;
 
@@ -418,6 +426,10 @@ class _TranscriptSegmentsView extends StatelessWidget {
           ),
         if (hasPartial) ...[
           if (hasLeadingContent) const SizedBox(height: 12),
+          _SpeakerBadge(
+            speakerLabel: _normalizedSpeakerLabel(partialSpeakerLabel),
+          ),
+          const SizedBox(height: 4),
           Text(partialTranscript, style: processingStyle),
         ],
         if (showProcessingTail) ...[
@@ -482,6 +494,10 @@ class _SegmentTranscriptText extends StatelessWidget {
           ],
           Row(
             children: [
+              if (segments[i].speakerLabel?.trim().isNotEmpty == true)
+                _SpeakerBadge(
+                  speakerLabel: segments[i].speakerLabel!.trim(),
+                ),
               const Spacer(),
               Text(
                 formatSegmentClockTime(segments[i].recordedAt),
@@ -497,23 +513,39 @@ class _SegmentTranscriptText extends StatelessWidget {
   }
 }
 
+/// Trims [label] and falls back to the localized unknown-speaker string when
+/// absent or whitespace-only.
+String _normalizedSpeakerLabel(String? label) {
+  final trimmed = label?.trim() ?? '';
+  if (trimmed.isEmpty) return StringKeys.homeSpeakerUnknown.tr;
+  return trimmed;
+}
+
 class _SpeakerBadge extends StatelessWidget {
-  const _SpeakerBadge();
+  const _SpeakerBadge({required this.speakerLabel});
+
+  final String speakerLabel;
 
   @override
   Widget build(BuildContext context) {
+    final label = _normalizedSpeakerLabel(speakerLabel);
+    final isUnknown = label == StringKeys.homeSpeakerUnknown.tr;
+    final background = isUnknown
+        ? AppColors.textSecondary
+        : AppColors.colorForSpeaker(label);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: background,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        StringKeys.homeSpeakerLabel.tr,
+        label,
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: AppColors.background,
+          color: Colors.white,
         ),
       ),
     );

@@ -5,10 +5,12 @@ class TranscriptSegmentEntry {
   const TranscriptSegmentEntry({
     required this.text,
     required this.recordedAt,
+    this.speakerLabel,
   });
 
   final String text;
   final DateTime recordedAt;
+  final String? speakerLabel;
 }
 
 List<TranscriptSegmentEntry> transcriptEntriesFromSegments(
@@ -20,6 +22,7 @@ List<TranscriptSegmentEntry> transcriptEntriesFromSegments(
         (segment) => TranscriptSegmentEntry(
           text: segment.displayText,
           recordedAt: segment.recordedAt,
+          speakerLabel: segment.speakerLabel,
         ),
       )
       .toList(growable: false);

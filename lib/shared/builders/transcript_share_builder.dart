@@ -45,7 +45,12 @@ class TranscriptShareBuilder {
   }
 
   static String buildSegmentLine(SegmentModel segment) {
-    return '[${_formatDuration(segment.startMs ~/ 1000)}] ${segment.text}';
+    final time = _formatDuration(segment.startMs ~/ 1000);
+    final speaker = segment.speakerLabel?.trim();
+    if (speaker != null && speaker.isNotEmpty) {
+      return '[$time] $speaker: ${segment.text}';
+    }
+    return '[$time] ${segment.text}';
   }
 
   static String noTranscriptFallback() {

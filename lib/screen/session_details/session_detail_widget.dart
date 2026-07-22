@@ -272,6 +272,7 @@ class _TranscriptSection extends StatelessWidget {
                   segment.startMs ~/ 1000,
                 ),
                 message: segment.text,
+                speakerLabel: segment.speakerLabel,
               );
             }
 
