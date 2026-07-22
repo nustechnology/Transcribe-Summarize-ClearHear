@@ -2,7 +2,7 @@ import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/segment_repository.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/session_detail_repository.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/session_repository.dart';
-import 'package:transcribe_summarize_clearhear/screen/session_detail/session_detail_dependencies.dart';
+import 'package:transcribe_summarize_clearhear/screen/session_details/session_detail_dependencies.dart';
 import 'package:transcribe_summarize_clearhear/screen/session_details/controllers/session_detail_controller.dart';
 import 'package:transcribe_summarize_clearhear/service/session_summary_service.dart';
 import 'package:transcribe_summarize_clearhear/service/share_service.dart';

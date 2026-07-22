@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
 import 'package:transcribe_summarize_clearhear/screen/history/bindings/history_binding.dart';
 import 'package:transcribe_summarize_clearhear/screen/session_details/bindings/session_detail_binding.dart';
-import 'package:transcribe_summarize_clearhear/screen/session_details/session_detail_widget.dart';
+import 'package:transcribe_summarize_clearhear/screen/session_details/session_detail_view.dart';
 import 'package:transcribe_summarize_clearhear/screen/history/history_widget.dart';
 import 'package:transcribe_summarize_clearhear/screen/home/bindings/home_binding.dart';
 import 'package:transcribe_summarize_clearhear/screen/home/home_widget.dart';
