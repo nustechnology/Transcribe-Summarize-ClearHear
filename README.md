@@ -9,6 +9,7 @@ State management: **GetX**.
 ## Features
 
 - **Offline live captions** — real-time on-device transcription (sherpa-onnx streaming Zipformer2); no network needed once the model is present.
+- **Speaker diarization** — each transcript line is automatically tagged with who is speaking (Speaker 1, Speaker 2, ...). Voice embeddings are extracted on-device (sherpa-onnx Cam++), matched by cosine similarity, and labels appear live as colored badges while captioning. Speaker-change detection splits utterances mid-stream when the voice changes, and labels are re-refined after each session for accuracy. Everything runs offline — no voice data ever leaves the device.
 - **Pause & resume** captioning within a session.
 - **On-device summaries** — summarize a session with a local LLM (Qwen2.5-0.5B); retryable on failure.
 - **Local history + search** — sessions stored in SQLite with full-text search and multi-select delete.
@@ -50,6 +51,7 @@ flowchart TB
         Cap[ConversationSegmentCapture]
         Audio[AudioRecorderService]
         Sherpa[SherpaOnnxService · streaming ASR]
+        Spk[SpeakerDiarizationService]
         Llama[LlamaService]
         Sum[SessionSummaryService · background queue]
         FG[ForegroundServiceHandler]
@@ -81,8 +83,8 @@ flowchart TB
     Setts --> SetC
     Shell --> MainC
 
-    HomeC --> Live & FG & SessR & SegR & SetR
-    Live --> Audio & Sherpa & Cap
+    HomeC --> Live & Spk & FG & SessR & SegR & SetR
+    Live --> Audio & Sherpa & Spk & Cap
     HistC --> HistR & Sum
     DetailC --> DetR & Sum & Share
     SetC --> SetR & SessR
@@ -93,6 +95,7 @@ flowchart TB
     SessR & SegR & SetR --> DBS
     DBS --> DBF
     Sherpa --> AST & NAT & HF
+    Spk --> AST & NAT & HF
     Llama --> AST & NAT
     Audio --> NAT
     FG --> NAT
@@ -173,6 +176,101 @@ sequenceDiagram
     SS-->>DC: updates stream (sessionId)
     DC-->>V: refresh summary
 ```
+
+## Speaker Diarization
+
+ClearHear automatically figures out **who is speaking** and tags each transcript line with a speaker label — all on-device, no internet needed.
+
+You don't tell the app who is talking. It analyzes each speaker's voice and assigns a consistent label throughout the session. The first person gets labeled **Speaker 1**, the second **Speaker 2**, and so on. When the same person speaks again later, they get the same label. Everything resets when you start a new session — "Speaker 1" in one session is unrelated to "Speaker 1" in another.
+
+This works because each speaker's voice can be represented by a distinctive acoustic embedding (sometimes called a voice fingerprint). ClearHear extracts that fingerprint from each utterance using a small on-device neural network (Cam++), then compares new voices against previously seen ones. If the voice matches a known speaker, it reuses that label. If it's a new voice, it registers a new speaker.
+
+### Example
+
+Two people talking:
+
+**Alice:** Good morning.  
+**Bob:** Hi Alice.  
+**Alice:** How are you?
+
+ClearHear captions this as:
+
+**Speaker 1:** Good morning.  
+**Speaker 2:** Hi Alice.  
+**Speaker 1:** How are you?
+
+The app doesn't know their names are Alice and Bob — but it correctly identifies that two distinct voices are present and attributes each line to the right person.
+
+The following sequence diagram shows how speaker labels are generated and updated during live captioning.
+
+### Speaker Diarization flow
+
+Each finalized ASR segment's audio is run through a **speaker embedding model** (sherpa-onnx Cam++, ONNX) to produce an embedding vector. This embedding is matched against previously seen speakers via **cosine similarity** (computed in Dart, not via sherpa-onnx's native manager). Labels (`Speaker 1`, `Speaker 2`, …) are assigned live and appear in the caption UI. The session resets the roster at every start.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant HC as HomeController
+    participant LT as LiveTranscriptService
+    participant ASR as SherpaOnnxService
+    participant Spk as SpeakerDiarizationService
+    participant UI as HomeView
+
+    U->>HC: startCaptioning()
+    HC->>LT: start()
+    LT->>Spk: ensureModelReady() (unawaited)
+    LT->>Spk: resetSession() — clear profiles
+
+    loop Every PCM chunk (real-time)
+        LT->>ASR: acceptWaveform + decode
+        ASR-->>LT: partial text
+        LT-->>HC: onPartialText
+
+        Note over LT,Spk: Early label (after >=1s audio, has speech energy)
+        LT->>LT: accumulate audio chunks
+        LT->>Spk: labelSegment(samples)
+        Spk->>Spk: extract embedding (Cam++ ONNX)
+        Spk->>Spk: cosine-similarity match against stored profiles
+        alt score >= 0.22 (match)
+            Spk-->>LT: reuse existing label ("Speaker 1")
+        else no match (new voice)
+            Spk-->>LT: register new label ("Speaker N")
+        end
+        LT-->>HC: onPartialSpeakerLabel
+        HC-->>UI: live badge updates
+
+        Note over LT,Spk: Speaker-change probe (every ~0.35s, trailing 0.8s window)
+        LT->>Spk: identifySpeaker(trailingWindow, relativeToLabel)
+        Spk->>Spk: extract embedding + cosine match (read-only)
+        Spk-->>LT: SpeakerProbeResult
+        alt different speaker confirmed (streak >= N)
+            LT->>ASR: force-cut: finalize current stream
+            LT->>LT: split text at cut boundary (token timestamps)
+            LT->>LT: commit old-speaker segment, carry tail to new stream
+        end
+
+        alt Endpoint detected (trailing silence)
+            LT->>LT: finalize segment (precomputed label or fallback)
+            LT-->>HC: onSegmentFinalized(segment, speakerLabel)
+            HC-->>UI: append segment with Speaker badge
+            HC->>HC: persistSegmentToDraft (speaker_label column)
+        end
+    end
+
+    U->>HC: stopCaptioning() -> finish()
+    HC->>LT: refineSpeakerLabels()
+    LT->>Spk: relabelSegments(segments) — chronological re-extraction
+    Spk-->>LT: updated labels
+    LT-->>HC: final segments with refined speaker labels
+```
+
+Key design decisions:
+
+- **Threshold 0.22** — tuned from real device logs of multi-speaker conversations with the bundled Cam++ embedding model (`3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx`, 16 kHz). Higher thresholds (0.3–0.5) caused false negatives; genuine same-speaker scores stay ≥0.22 while impostor scores remain ≤0.13. These score distributions are current empirical observations and may drift with future model or preprocessing changes.
+- **Multiple stored samples per speaker (up to 8)** — matching against the best individual sample is more robust than a single running-average centroid, because a real voice varies noticeably between short utterances.
+- **Read-only probes for speaker change** — `identifySpeaker()` never registers new speakers or updates stored samples, making it safe to call repeatedly on rolling windows mid-utterance.
+- **Confirmation gating** — a speaker-change probe must be confirmed 1–2 times (depending on confidence margin) before triggering a force-cut, preventing false switches from short cross-talk or noisy windows.
+- **Session-independent rosters** — `resetSession()` clears all profiles at every `start()`, so "Speaker 1" in session A is unrelated to "Speaker 1" in session B.
 
 ## Data model
 
@@ -282,6 +380,7 @@ Defaults are in `lib/config/ml_model_config.dart`:
 | Feature | Default |
 |---------|---------|
 | Transcription | sherpa-onnx streaming **Zipformer2**, English (int8 ONNX) |
+| Speaker diarization | sherpa-onnx **Cam++** embedding extractor (3D-Speaker, ONNX); cosine-similarity matching in Dart |
 | Summarization | **Qwen2.5-0.5B-Instruct** (GGUF via `flutter_llama`) |
 | Segment boundary | endpoint detection on trailing silence (~0.8 s) |
 | Audio | 16 kHz mono PCM |
@@ -289,6 +388,7 @@ Defaults are in `lib/config/ml_model_config.dart`:
 **Model distribution**
 
 - **ASR (ONNX)** — encoder / decoder / joiner + `tokens.txt`. Fetched by `tool/download_sherpa_onnx_model.sh` into `assets/models/...`; the app copies them to its data directory on first launch. If the assets are missing, `SherpaOnnxService` downloads them from HuggingFace as a fallback.
+- **Speaker embedding (ONNX)** — `3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx` (~27 MB). Fetched by the same download script; the app copies it alongside the ASR model with the same HuggingFace fallback.
 - **Summary (GGUF)** — `assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf`, stored with **Git LFS**. After cloning:
 
 ```bash

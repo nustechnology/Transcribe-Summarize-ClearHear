@@ -84,6 +84,13 @@ abstract final class MlModelConfig {
   ///   observed genuine-match score. Lowered to 0.22, comfortably below
   ///   every genuine-match near-miss seen so far while staying well
   ///   above every impostor score seen so far.
+  ///
+  /// These score distributions are empirical observations from real device
+  /// logs at this threshold with the **current** embedding model
+  /// ([diarizationEmbeddingFile]) and its Cam++ preprocessor (16 kHz).
+  /// They are **not** guaranteed to hold across different model versions,
+  /// preprocessing pipelines, or sherpa-onnx internal defaults — any of
+  /// those changes warrant re-evaluating the threshold.
   static const diarizationSpeakerMatchThreshold = 0.22;
 
   /// Minimum buffered audio (seconds) before computing a speaker embedding
