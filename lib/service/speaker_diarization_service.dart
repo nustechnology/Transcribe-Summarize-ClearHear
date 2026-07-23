@@ -407,7 +407,6 @@ class SpeakerDiarizationService {
         .toList(growable: false);
     if (withAudio.isEmpty) return;
 
-    resetSession();
     for (final segment in withAudio) {
       await Future<void>.delayed(Duration.zero);
       try {
