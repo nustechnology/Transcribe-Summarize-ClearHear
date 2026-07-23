@@ -457,11 +457,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       final result = await liveTranscript.finish();
       _applyTranscriptResult(result);
 
-      isFinishingTranscript.value = false;
-
-      // Re-label from retained PCM after unlocking the UI. Yields between
-      // segments so Cam++ does not freeze the isolate; clears audioSamples
-      // when finished.
+      // Re-label from retained PCM. Yields between segments so Cam++
+      // does not freeze the isolate; clears audioSamples when finished.
       final refined = await liveTranscript.refineSpeakerLabels();
       _applyTranscriptResult(refined);
 
