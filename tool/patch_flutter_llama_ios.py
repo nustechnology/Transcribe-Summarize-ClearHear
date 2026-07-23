@@ -13,6 +13,7 @@ import pathlib
 import sys
 
 MARKER = "PATCHED_FOR_CLEARHEAR_SWIFT_CSTRING"
+MARKER_V1 = "PATCHED_FOR_CLEARHEAR_SWIFT_STRING"
 
 OLD_LOAD_CALL = """            let success = llama_init_model(
                 modelPath,
@@ -93,7 +94,7 @@ func llama_generate_stream_init(
     fixed_stream_declaration = """@_silgen_name("llama_generate_stream_init")
 func llama_generate_stream_init(
     _ prompt: UnsafePointer<CChar>,"""
-    if MARKER in content:
+    if MARKER in content or MARKER_V1 in content:
         if stream_declaration in content:
             content = content.replace(
                 stream_declaration,
