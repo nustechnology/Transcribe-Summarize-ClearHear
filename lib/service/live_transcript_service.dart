@@ -447,9 +447,8 @@ class LiveTranscriptService {
       _segmentAudioChunks.clear();
     }
 
-    _carryOverText =
-        textSplit.suffix.isEmpty ? null : textSplit.suffix;
-    onPartialText?.call(_carryOverText ?? '');
+    _carryOverText = null;
+    onPartialText?.call('');
 
     final cooldownSamples = (MlModelConfig.audioSampleRate *
             MlModelConfig.diarizationChangeProbeIntervalSeconds)
@@ -458,10 +457,11 @@ class LiveTranscriptService {
         _processedSampleCount + cooldownSamples;
 
     _stream = _sherpaOnnxService.createStream();
-    // Do NOT seed the next utterance with the probe window — at a rapid
-    // turn boundary that window is still mixed with the previous speaker.
+    if (split.tail.isNotEmpty) {
+      _sherpaOnnxService.acceptWaveform(_stream!, split.tail);
+    }
     _beginNextUtterance(
-      seedChunks: const [],
+      seedChunks: split.tail.isEmpty ? const <Float32List>[] : [split.tail],
       segmentStartSampleCount: cutEndSampleCount,
     );
   }
