@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'dart:io';
 import 'package:transcribe_summarize_clearhear/arch/repository/impl/segment_repository_impl.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/impl/session_repository_impl.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/impl/settings_repository_impl.dart';
@@ -6,6 +7,9 @@ import 'package:transcribe_summarize_clearhear/arch/repository/segment_repositor
 import 'package:transcribe_summarize_clearhear/arch/repository/session_repository.dart';
 import 'package:transcribe_summarize_clearhear/arch/repository/settings_repository.dart';
 import 'package:transcribe_summarize_clearhear/service/database_service.dart';
+import 'package:transcribe_summarize_clearhear/service/interruption/android_interruption_adapter.dart';
+import 'package:transcribe_summarize_clearhear/service/interruption/ios_interruption_adapter.dart';
+import 'package:transcribe_summarize_clearhear/service/interruption/microphone_interruption_manager.dart';
 import '../../../arch/repository/history_repository.dart';
 import '../../home/controllers/home_controller.dart';
 import '../controllers/main_controller.dart';
@@ -73,6 +77,15 @@ class MainBinding extends Bindings {
         fenix: true,
       );
     }
+    if (!Get.isRegistered<MicrophoneInterruptionManager>()) {
+      final adapter = Platform.isAndroid
+          ? AndroidInterruptionAdapter()
+          : IosInterruptionAdapter();
+      Get.put<MicrophoneInterruptionManager>(
+        MicrophoneInterruptionManager(adapter: adapter),
+        permanent: true,
+      );
+    }
     if (!Get.isRegistered<HomeController>()) {
       Get.put<HomeController>(
         HomeController(
@@ -80,6 +93,7 @@ class MainBinding extends Bindings {
           settingsRepository: Get.find<SettingsRepository>(),
           sessionRepository: Get.find<SessionRepository>(),
           segmentRepository: Get.find<SegmentRepository>(),
+          interruptionManager: Get.find<MicrophoneInterruptionManager>(),
         ),
         permanent: true,
       );
