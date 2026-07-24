@@ -32,6 +32,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/coverage/
 
 # Native ML vendored sources (fetched by tool/setup_flutter_llama_android.sh)
 /third_party/llama.cpp/
