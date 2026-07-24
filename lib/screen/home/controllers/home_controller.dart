@@ -16,6 +16,7 @@ import '../../../screen/history/controllers/history_controller.dart';
 import '../../../screen/main/controllers/main_controller.dart';
 import '../../../service/audio_recorder_service.dart';
 import '../../../service/foreground_service_handler.dart';
+import '../../../service/interruption/microphone_interruption_manager.dart';
 import '../../../service/live_transcript_service.dart';
 import '../../../service/llama_service.dart';
 import '../../../service/sherpa_onnx_service.dart';
@@ -36,6 +37,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     LiveTranscriptService? liveTranscriptService,
     SessionRepository? sessionRepository,
     SegmentRepository? segmentRepository,
+    MicrophoneInterruptionManager? interruptionManager,
   })  : _settingsRepository = settingsRepository,
         _sherpaOnnxService = sherpaOnnxService ?? SherpaOnnxService(),
         _speakerDiarizationService =
@@ -44,7 +46,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         _audioRecorderService = audioRecorderService ?? AudioRecorderService(),
         _liveTranscriptService = liveTranscriptService,
         _sessionRepository = sessionRepository,
-        _segmentRepository = segmentRepository;
+        _segmentRepository = segmentRepository,
+        _interruptionManager = interruptionManager;
 
   final SettingsRepository? _settingsRepository;
   final SherpaOnnxService _sherpaOnnxService;
@@ -54,6 +57,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   final LiveTranscriptService? _liveTranscriptService;
   final SessionRepository? _sessionRepository;
   final SegmentRepository? _segmentRepository;
+  final MicrophoneInterruptionManager? _interruptionManager;
 
   LiveTranscriptService? _activeLiveTranscript;
   Future<void>? _finishFuture;
@@ -95,6 +99,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   final showTranscriptFinishErrorPrompt = false.obs;
   final transcriptFinishError = Rxn<TranscriptFinishError>();
   final isSavingSession = false.obs;
+  final isInterrupted = false.obs;
 
   RecorderController get recorderController =>
       _audioRecorderService.recorderController;
@@ -274,6 +279,29 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     unawaited(_preloadAsrModel());
     unawaited(_loadPersistedSettings());
+    _setupInterruptionManager();
+  }
+
+  void _setupInterruptionManager() {
+    final manager = _interruptionManager;
+    if (manager == null) return;
+
+    manager.onPauseCallback = () async {
+      await pauseCaptioning();
+    };
+
+    manager.onAutoSaveCallback = () async {
+      await _autoSaveInterruptedSession();
+    };
+  }
+
+  Future<void> _autoSaveInterruptedSession() async {
+    try {
+      await stopCaptioning();
+    } catch (error, stackTrace) {
+      debugPrint('[Transcribe] Auto-save failed: $error');
+      debugPrint('$stackTrace');
+    }
   }
 
   Future<void> _loadPersistedSettings() async {
@@ -372,6 +400,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
       _captioningStartedAt = DateTime.now();
       _startDurationTimer();
+      _interruptionManager?.onSessionStarted();
 
       debugPrint('[Transcribe] Segment recording started');
     } on MissingPluginException {
@@ -398,6 +427,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   Future<void> stopCaptioning() async {
     if (!isCaptioning.value || isFinishingTranscript.value) return;
+
+    _interruptionManager?.setFinishInProgress(true);
 
     // Stop accepting draft writes before flush/finalize so late inserts
     // cannot race with save's delete+reinsert and duplicate rows.
@@ -517,6 +548,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _clearPendingSaveState();
     _captioningStartedAt = null;
     captioningElapsed.value = Duration.zero;
+    _interruptionManager?.onSessionEnded();
   }
 
   Future<bool> savePendingSession(String title) async {
@@ -581,6 +613,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         subtitle: StringKeys.homeSaveSessionStoredNote.tr,
       );
 
+      _interruptionManager?.onSessionEnded();
+
       return true;
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Save session failed: $error');
@@ -628,9 +662,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       const chunkSize = 40;
       for (var i = 0; i < segments.length; i += chunkSize) {
         await Future<void>.delayed(Duration.zero);
-        final end = i + chunkSize < segments.length
-            ? i + chunkSize
-            : segments.length;
+        final end =
+            i + chunkSize < segments.length ? i + chunkSize : segments.length;
         await segmentRepo.insertSegments(segments.sublist(i, end));
       }
     }
@@ -679,9 +712,8 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         const chunkSize = 40;
         for (var i = 0; i < segments.length; i += chunkSize) {
           await Future<void>.delayed(Duration.zero);
-          final end = i + chunkSize < segments.length
-              ? i + chunkSize
-              : segments.length;
+          final end =
+              i + chunkSize < segments.length ? i + chunkSize : segments.length;
           await segmentRepo.insertSegments(segments.sublist(i, end));
         }
       }
@@ -734,6 +766,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     partialTranscript.value = '';
     partialSpeakerLabel.value = null;
     _finalizedSegmentIds.clear();
+    isInterrupted.value = false;
   }
 
   void _clearPendingSaveState() {
@@ -805,6 +838,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       statusMessage.value = '';
       _captioningStartedAt = DateTime.now().subtract(captioningElapsed.value);
       _startDurationTimer();
+      unawaited(_interruptionManager?.onResumed());
       debugPrint('[Transcribe] Resumed captioning');
     } catch (error, stackTrace) {
       debugPrint('[Transcribe] Resume failed: $error');
@@ -891,6 +925,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   @override
   void onClose() {
     WidgetsBinding.instance.removeObserver(this);
+    _interruptionManager?.onSessionEnded();
     unawaited(ForegroundServiceHandler.stop());
     unawaited(_tearDown());
     super.onClose();

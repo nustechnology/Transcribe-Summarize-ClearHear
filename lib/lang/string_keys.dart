@@ -94,6 +94,11 @@ abstract class StringKeys {
       'session_detail_delete_confirm_delete';
   static const datetimeToday = 'datetime_today';
   static const datetimeYesterday = 'datetime_yesterday';
+  static const micInterrupted = 'mic_interrupted';
+  static const micRecoveredResume = 'mic_recovered_resume';
+  static const micAutoSavedTitle = 'mic_auto_saved_title';
+  static const micAutoSavedBody = 'mic_auto_saved_body';
+  static const micPermissionLostOnRecovery = 'mic_permission_lost_on_recovery';
   static const somethingWentWrong = 'something_went_wrong';
 
   static const homeSaveSessionTitle = 'home_save_session_title';
