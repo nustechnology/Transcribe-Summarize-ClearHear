@@ -1,10 +1,22 @@
 # ClearHear (Transcribe-Summarize-ClearHear)
 
-On-device live captioning for Flutter. Streams microphone audio, transcribes it in real time with **sherpa-onnx** (streaming Zipformer2), and summarizes the transcript locally with **flutter_llama** (Qwen2.5-0.5B GGUF).
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Flutter](https://img.shields.io/badge/Flutter-3.44.4-02569B.svg)](.fvmrc)
 
-Transcription and summarization run entirely on-device. The only network access is a fallback that downloads the ASR model from HuggingFace when it is missing from `assets/`.
+On-device live captioning for Flutter. Streams microphone audio, transcribes it in real time with **sherpa-onnx** (streaming Zipformer2), labels speakers live, and summarizes the transcript locally with **flutter_llama** (Qwen2.5-0.5B GGUF).
+
+Transcription, diarization, and summarization run entirely on-device. The only network access for ML is a fallback that downloads missing ONNX models from Hugging Face when they are not in `assets/`.
 
 State management: **GetX**.
+
+| Doc | Purpose |
+|-----|---------|
+| [LICENSE](LICENSE) | MIT License |
+| [NOTICE.md](NOTICE.md) | Third-party & model attribution |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, conventions, PRs |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes |
 
 ## Features
 
@@ -334,7 +346,15 @@ erDiagram
 | Xcode + CocoaPods | iOS builds (macOS only) |
 | Android SDK | NDK + CMake **3.22+** (Android SDK Manager) |
 | [Git LFS](https://git-lfs.com) | The summary GGUF is stored via LFS |
-| Internet | First run only — to fetch the ASR model (~72 MB) if it is not already in `assets/` |
+| Internet | To fetch ASR (~72 MB) + speaker-embedding (~27 MB) ONNX when not already present in `assets/` |
+
+**Device / disk (approximate)**
+
+| Resource | Notes |
+|----------|-------|
+| Free storage | ~600 MB+ for models (GGUF ~469 MB + ASR ~72 MB + embedding ~27 MB) plus app binaries |
+| RAM | Mid-range phones recommended; ASR + LLM together are CPU/memory heavy |
+| Mic | Required for live captioning |
 
 Microphone permission is declared in `android/app/src/main/AndroidManifest.xml` and `ios/Runner/Info.plist`.
 
@@ -363,7 +383,7 @@ cd ios && pod install && cd ..
 
 Use `fvm flutter` (not a global Flutter SDK) so the version matches `.fvmrc`.
 
-> The ASR model directory `assets/models/sherpa-onnx-streaming-zipformer-en-2023-06-26/` is git-ignored. If you skip the download script, the app downloads the model from HuggingFace on first launch instead.
+> The ASR model directory `assets/models/sherpa-onnx-streaming-zipformer-en-2023-06-26/` is git-ignored. If you skip the download script, the app downloads the model from HuggingFace when it is not already present in `assets/`.
 
 ## Run
 
@@ -387,8 +407,8 @@ Defaults are in `lib/config/ml_model_config.dart`:
 
 **Model distribution**
 
-- **ASR (ONNX)** — encoder / decoder / joiner + `tokens.txt`. Fetched by `tool/download_sherpa_onnx_model.sh` into `assets/models/...`; the app copies them to its data directory on first launch. If the assets are missing, `SherpaOnnxService` downloads them from HuggingFace as a fallback.
-- **Speaker embedding (ONNX)** — `3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx` (~27 MB). Fetched by the same download script; the app copies it alongside the ASR model with the same HuggingFace fallback.
+- **ASR (ONNX)** — encoder / decoder / joiner + `tokens.txt`. Fetched by `tool/download_sherpa_onnx_model.sh` into `assets/models/...`; the app copies them to its data directory. If they are not already present in `assets/`, `SherpaOnnxService` downloads them from Hugging Face as a fallback.
+- **Speaker embedding (ONNX)** — `3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx` (~27 MB). Fetched by the same download script; the app copies it alongside the ASR model with the same Hugging Face fallback.
 - **Summary (GGUF)** — `assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf`, stored with **Git LFS**. After cloning:
 
 ```bash
@@ -396,6 +416,12 @@ git lfs install
 git lfs pull
 ls -lh assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf   # should be ~469 MB, not a small pointer
 ```
+
+Upstream licenses and attribution for these models (and major native deps) are listed in [NOTICE.md](NOTICE.md). Application source is [MIT](LICENSE); model weights keep their own upstream terms.
+
+## Privacy
+
+Audio, captions, speaker embeddings, and summaries are processed **on the device**. There is no ClearHear backend. Network is used only to download missing ONNX models from Hugging Face when assets are absent. Users can disable saving and clear local data in Settings.
 
 ## Build
 
@@ -437,7 +463,7 @@ Debug logs: `[LiveTranscript]`, `[SherpaOnnx]`, `[Transcribe]`, `[SegmentCapture
 
 | Issue | Fix |
 |-------|-----|
-| ASR model fails to load / `SherpaOnnx model is not ready` | Run `bash tool/download_sherpa_onnx_model.sh` (or let the app download on first launch). Confirm `assets/models/sherpa-onnx-.../` is not empty |
+| ASR model fails to load / `SherpaOnnx model is not ready` | Run `bash tool/download_sherpa_onnx_model.sh` (or let the app download when not already present in `assets/`). Confirm `assets/models/sherpa-onnx-.../` is not empty |
 | Android: `flutter_llama` / CMake / `llama_context_type` errors | `bash tool/setup_flutter_llama_android.sh` after `pub get`, then full rebuild |
 | Android: CMake 3.19+ / `SPIRV-Headers` (`ggml-vulkan`) errors | Same script (CPU backend). Install CMake 3.22+ via Android SDK Manager if prompted |
 | iOS: app crashes on Summarize / `llama_init_model` SIGSEGV | `bash tool/patch_flutter_llama_ios.sh`, then `cd ios && pod install` and full rebuild |
@@ -469,3 +495,11 @@ tool/
 android/app/src/main/kotlin/com/nus/clearhear/
   TranscriptionForegroundService.kt   # Foreground service (MethodChannel: clearhear/foreground_service)
 ```
+
+## License
+
+Copyright 2026 NUS Technology.
+
+Licensed under the [MIT License](LICENSE). Third-party software and ML model notices: [NOTICE.md](NOTICE.md).
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
