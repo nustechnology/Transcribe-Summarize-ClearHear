@@ -6,7 +6,12 @@ import 'package:flutter/services.dart';
 class ForegroundServiceHandler {
   static const _channel = MethodChannel('clearhear/foreground_service');
 
-  static bool get _isAndroid => Platform.isAndroid;
+  /// When non-null, overrides [Platform.isAndroid] so macOS/CI can exercise
+  /// the Android MethodChannel path.
+  @visibleForTesting
+  static bool? debugIsAndroid;
+
+  static bool get _isAndroid => debugIsAndroid ?? Platform.isAndroid;
 
   static Future<void> start() async {
     if (!_isAndroid) return;

@@ -3,6 +3,15 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
+/// Which SQLite FTS backend to use for [segment_search].
+///
+/// Production always uses [fts4] (mobile system SQLite). [fts5] exists only so
+/// unit tests can boot against `sqflite_common_ffi`, which ships FTS5.
+/// When the host has no FTS3/4 module, production FTS4 behavior is skipped in
+/// unit tests and must be validated on device / system SQLite separately.
+@visibleForTesting
+enum SegmentSearchFtsMode { fts4, fts5 }
+
 /// Low-level SQLite wrapper.
 ///
 /// Responsibilities:
@@ -12,11 +21,19 @@ import 'package:sqflite/sqflite.dart';
 ///
 /// No business logic lives here. All repositories inject this service.
 class DatabaseService {
+  DatabaseService({
+    @visibleForTesting this.ftsMode = SegmentSearchFtsMode.fts4,
+  });
+
   static const _dbName = 'clearhear.db';
 
   // Initial schema version.
   // Increase this only when adding real migrations.
   static const _dbVersion = 3;
+
+  /// FTS backend used when creating [segment_search]. Defaults to FTS4.
+  @visibleForTesting
+  final SegmentSearchFtsMode ftsMode;
 
   Database? _db;
 
@@ -56,14 +73,18 @@ class DatabaseService {
   // ── Schema creation ───────────────────────────────────────
 
   Future<void> _onCreate(Database db, int version) async {
-    // Run all DDL in a single batch for speed.
+    // Tables/indexes first; FTS + triggers depend on [ftsMode].
     final batch = db.batch();
     _createTables(batch);
     _createIndexes(batch);
-    _createTriggers(batch);
-    _createFts(batch);
-    _seedData(batch);
     await batch.commit(noResult: true);
+
+    await _createFts(db);
+    await _createTriggers(db);
+
+    final seedBatch = db.batch();
+    _seedData(seedBatch);
+    await seedBatch.commit(noResult: true);
     debugPrint('[DB] Created schema v$version');
   }
 
@@ -203,51 +224,62 @@ class DatabaseService {
     ''');
   }
 
-  void _createTriggers(Batch batch) {
-    // FTS4 INSERT sync
-    batch.execute('''
+  Future<void> _createTriggers(Database db) async {
+    // Prefer rowid so triggers work for both FTS4 (docid alias) and FTS5.
+    await db.execute('''
       CREATE TRIGGER IF NOT EXISTS trg_segments_ai
         AFTER INSERT ON segments
       BEGIN
-        INSERT INTO segment_search (docid, text, session_id)
+        INSERT INTO segment_search (rowid, text, session_id)
         VALUES (NEW.id, NEW.text, NEW.session_id);
       END
     ''');
 
-    // FTS4 DELETE sync
-    batch.execute('''
+    await db.execute('''
       CREATE TRIGGER IF NOT EXISTS trg_segments_ad
         AFTER DELETE ON segments
       BEGIN
-        DELETE FROM segment_search WHERE docid = OLD.id;
+        DELETE FROM segment_search WHERE rowid = OLD.id;
       END
     ''');
 
-    // FTS4 UPDATE sync (text changed)
-    batch.execute('''
+    await db.execute('''
       CREATE TRIGGER IF NOT EXISTS trg_segments_au
         AFTER UPDATE OF text ON segments
       BEGIN
-        DELETE FROM segment_search WHERE docid = OLD.id;
-        INSERT INTO segment_search (docid, text, session_id)
+        DELETE FROM segment_search WHERE rowid = OLD.id;
+        INSERT INTO segment_search (rowid, text, session_id)
         VALUES (NEW.id, NEW.text, NEW.session_id);
       END
     ''');
   }
 
-  void _createFts(Batch batch) {
-    // FTS4 virtual table — external content mirrors segments.
-    // unicode61 handles accented/multilingual text.
-    batch.execute('''
-      CREATE VIRTUAL TABLE IF NOT EXISTS segment_search
-      USING fts4 (
-        content="segments",
-        text,
-        session_id,
-        notindexed=session_id,
-        tokenize=unicode61
-      )
-    ''');
+  /// Creates the FTS mirror of [segments.text].
+  ///
+  /// Production uses FTS4 (external-content). Tests may inject FTS5 for FFI.
+  Future<void> _createFts(Database db) async {
+    switch (ftsMode) {
+      case SegmentSearchFtsMode.fts4:
+        await db.execute('''
+          CREATE VIRTUAL TABLE IF NOT EXISTS segment_search
+          USING fts4 (
+            content="segments",
+            text,
+            session_id,
+            notindexed=session_id,
+            tokenize=unicode61
+          )
+        ''');
+      case SegmentSearchFtsMode.fts5:
+        await db.execute('''
+          CREATE VIRTUAL TABLE IF NOT EXISTS segment_search
+          USING fts5 (
+            text,
+            session_id UNINDEXED,
+            tokenize='unicode61'
+          )
+        ''');
+    }
   }
 
   void _seedData(Batch batch) {
