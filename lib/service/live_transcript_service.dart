@@ -88,6 +88,13 @@ class LiveTranscriptService {
   /// [requiredSpeakerChangeConfirmations] for fast-but-stable cuts.
   int _speakerChangeStreak = 0;
 
+  /// Buffer (seconds) added to the audio-level cut point when splitting ASR
+  /// timestamps. Streaming ASR decoding lags audio (left-context = 64 frames
+  /// ≈ 640 ms), so tokens near the boundary may have timestamps later than
+  /// their audio position. This buffer keeps the last few words with the
+  /// outgoing speaker instead of discarding them.
+  static const _kAsrTimestampBufferSeconds = 0.4;
+
   /// Text attributed to the next speaker after a timestamp split at
   /// force-cut (ASR stream was reset, so this is carried until the next
   /// segment commits).
@@ -427,7 +434,7 @@ class LiveTranscriptService {
       fullText: asr.text,
       tokens: asr.tokens,
       timestamps: asr.timestamps,
-      cutSeconds: cutSeconds,
+      cutSeconds: cutSeconds + _kAsrTimestampBufferSeconds,
       utteranceDurationSeconds: utteranceSeconds,
     );
     // Carry-over from a prior cut still belongs to this (outgoing) speaker.
