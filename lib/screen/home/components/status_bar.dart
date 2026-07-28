@@ -10,9 +10,12 @@ class StatusBar extends GetView<HomeController> {
 
   String _getStatusText(HomeController controller) {
     if (controller.isCaptioning.value) {
-      return controller.isPaused.value
-          ? StringKeys.homeStatusPaused.tr
-          : StringKeys.homeStatusListening.tr;
+      if (controller.isPaused.value) {
+        return controller.isInterrupted.value
+            ? StringKeys.micInterrupted.tr
+            : StringKeys.homeStatusPaused.tr;
+      }
+      return StringKeys.homeStatusListening.tr;
     }
     return StringKeys.homeStatusIdle.tr;
   }
@@ -92,6 +95,11 @@ class StatusBar extends GetView<HomeController> {
   }
 
   Widget _buildPausedBar() {
+    final controller = this.controller;
+    final subtitle = controller.isInterrupted.value
+        ? StringKeys.micInterrupted.tr
+        : StringKeys.homeStopCaptioningPaused.tr;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -128,7 +136,7 @@ class StatusBar extends GetView<HomeController> {
                   ),
                 ),
                 Text(
-                  StringKeys.homeStopCaptioningPaused.tr,
+                  subtitle,
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
