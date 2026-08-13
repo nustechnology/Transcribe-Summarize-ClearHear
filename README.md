@@ -1,6 +1,6 @@
 # ClearHear (Transcribe-Summarize-ClearHear)
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](LICENSE)
 [![Flutter](https://img.shields.io/badge/Flutter-3.44.4-02569B.svg)](.fvmrc)
 
 On-device live captioning for Flutter. Streams microphone audio, transcribes it in real time with **sherpa-onnx** (streaming Zipformer2), labels speakers live, and summarizes the transcript locally with **flutter_llama** (Qwen2.5-0.5B GGUF).
@@ -11,7 +11,7 @@ State management: **GetX**.
 
 | Doc | Purpose |
 |-----|---------|
-| [LICENSE](LICENSE) | MIT License |
+| [LICENSE](LICENSE) | PolyForm Noncommercial 1.0.0 |
 | [NOTICE.md](NOTICE.md) | Third-party & model attribution |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, conventions, PRs |
@@ -417,7 +417,7 @@ git lfs pull
 ls -lh assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf   # should be ~469 MB, not a small pointer
 ```
 
-Upstream licenses and attribution for these models (and major native deps) are listed in [NOTICE.md](NOTICE.md). Application source is [MIT](LICENSE); model weights keep their own upstream terms.
+Upstream licenses and attribution for these models (and major native deps) are listed in [NOTICE.md](NOTICE.md). Application source is [PolyForm Noncommercial 1.0.0](LICENSE); model weights keep their own upstream terms.
 
 ## Privacy
 
@@ -500,6 +500,8 @@ android/app/src/main/kotlin/com/nus/clearhear/
 
 Copyright 2026 NUS Technology.
 
-Licensed under the [MIT License](LICENSE). Third-party software and ML model notices: [NOTICE.md](NOTICE.md).
+ClearHear application source is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may download, run, modify, and redistribute the app for noncommercial purposes only (personal use, education, research, charity, and government). Commercial use — including internal use by for-profit organizations — is not permitted.
+
+Third-party software and ML model notices: [NOTICE.md](NOTICE.md).
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
