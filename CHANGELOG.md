@@ -9,9 +9,14 @@ and this project aims to follow
 
 ## [Unreleased]
 
+### Changed
+
+- Relicensed application source from MIT to [PolyForm Noncommercial
+  License 1.0.0](LICENSE) (download/run allowed; commercial use not permitted).
+
 ### Added
 
-- Open-source project documentation: `LICENSE`, `NOTICE.md`, `SECURITY.md`,
+- Project documentation: `LICENSE`, `NOTICE.md`, `SECURITY.md`,
   `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and this changelog.
 
 ## [1.0.0] - 2026-07-27
