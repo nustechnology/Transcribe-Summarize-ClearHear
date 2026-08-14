@@ -1,8 +1,8 @@
 # Third-party notices
 
-ClearHear application code is licensed under the [MIT License](LICENSE).
+ClearHear application code is licensed under the [NUS Technology Non-Commercial License 1.0](LICENSE).
 This file lists third-party software and ML models that ClearHear uses or
-distributes. Model weights are **not** part of the MIT-licensed application
+distributes. Model weights are **not** part of the NUS Technology Non-Commercial License 1.0 application
 source; they remain under their own upstream licenses. Always verify the
 upstream model card before redistributing weights.
 

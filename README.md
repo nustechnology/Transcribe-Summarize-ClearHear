@@ -1,366 +1,61 @@
 # ClearHear (Transcribe-Summarize-ClearHear)
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Non--Commercial-blue.svg)](LICENSE)
 [![Flutter](https://img.shields.io/badge/Flutter-3.44.4-02569B.svg)](.fvmrc)
 
-On-device live captioning for Flutter. Streams microphone audio, transcribes it in real time with **sherpa-onnx** (streaming Zipformer2), labels speakers live, and summarizes the transcript locally with **flutter_llama** (Qwen2.5-0.5B GGUF).
+**ClearHear** is a demonstration project by [NUS Technology](https://www.nustechnology.com/) exploring on-device AI, real-time speech recognition, and offline live captioning.
 
-Transcription, diarization, and summarization run entirely on-device. The only network access for ML is a fallback that downloads missing ONNX models from Hugging Face when they are not in `assets/`.
+This repository is the Flutter mobile client: it streams microphone audio, transcribes it in real time with **sherpa-onnx** (streaming Zipformer2), labels speakers live, and summarizes the transcript locally with **flutter_llama** (Qwen2.5-0.5B GGUF). Users can save sessions, search history, and export transcripts.
 
-State management: **GetX**.
+Transcription, diarization, and summarization run entirely **on-device**. There is no ClearHear backend. The only network access for ML is a fallback that downloads missing ONNX models from Hugging Face when they are not in `assets/`.
 
-| Doc | Purpose |
-|-----|---------|
-| [LICENSE](LICENSE) | MIT License |
-| [NOTICE.md](NOTICE.md) | Third-party & model attribution |
-| [SECURITY.md](SECURITY.md) | Vulnerability reporting |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, conventions, PRs |
-| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
-| [CHANGELOG.md](CHANGELOG.md) | Release notes |
+- **Company:** [NUS Technology](https://www.nustechnology.com/)
+- **Labs:** [ClearHear — Real-Time Offline Live Captioning](https://www.nustechnology.com/labs/clearhear-live-captioning)
 
-## Features
+## Table of contents
 
-- **Offline live captions** — real-time on-device transcription (sherpa-onnx streaming Zipformer2); no network needed once the model is present.
-- **Speaker diarization** — each transcript line is automatically tagged with who is speaking (Speaker 1, Speaker 2, ...). Voice embeddings are extracted on-device (sherpa-onnx Cam++), matched by cosine similarity, and labels appear live as colored badges while captioning. Speaker-change detection splits utterances mid-stream when the voice changes, and labels are re-refined after each session for accuracy. Everything runs offline — no voice data ever leaves the device.
-- **Pause & resume** captioning within a session.
-- **On-device summaries** — summarize a session with a local LLM (Qwen2.5-0.5B); retryable on failure.
-- **Local history + search** — sessions stored in SQLite with full-text search and multi-select delete.
-- **Session detail** — review the transcript and summary, and share/export the transcript.
-- **Adjustable caption size** — enlarge/shrink live (A+/A−), with a persisted default.
-- **Privacy controls** — toggle whether transcripts are saved, or clear all data.
-- **Background capture** — an Android foreground service keeps captioning alive when the app is backgrounded.
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Project structure](#project-structure)
+- [Mobile architecture](#mobile-architecture)
+- [Sequence diagrams](#sequence-diagrams)
+- [Captioning lifecycle](#captioning-lifecycle)
+- [Crash recovery / draft sessions](#crash-recovery--draft-sessions)
+- [Deployment / runtime topology](#deployment--runtime-topology)
+- [Conceptual data model](#conceptual-data-model)
+- [Main routes](#main-routes)
+- [Localization](#localization)
+- [Conventions](#conventions)
 
-## Architecture
+---
 
-ClearHear is layered: **View → Controller → Service / Repository → DatabaseService / Native**.
+## Tech stack
 
-- **Presentation** — `MainShell` hosts a bottom-nav with one `View` per tab (Live, History, Settings). Session detail opens from History.
-- **Controllers** (`GetxController`) — hold reactive state (`.obs`) and orchestrate services/repositories.
-- **Services** — business logic and I/O: streaming ASR (`SherpaOnnxService`), mic capture (`AudioRecorderService`), real-time transcript orchestration (`LiveTranscriptService`), background summarization (`SessionSummaryService`), the LLM (`LlamaService`), the Android foreground service, and sharing/export.
-- **Repositories** — data-access layer. Core tables (session, segment, settings) are an interface + `impl` over a single `DatabaseService`; `HistoryRepository` and `SessionDetailRepository` compose those repositories instead of touching the database.
-- **Data & Native** — SQLite via `sqflite`, model files under `assets/models`, and native access through FFI (`sherpa_onnx`, `flutter_llama`) and a MethodChannel (foreground service).
+| Layer | Technology |
+|---|---|
+| UI | Flutter (Material) |
+| Navigation | GetX (`GetMaterialApp.router`, nested `GetPage`) |
+| State / DI | GetX (`GetxController`, `Obx`, `Get.put` / `Get.lazyPut`) |
+| ASR | sherpa-onnx streaming Zipformer2 (ONNX) |
+| Speakers | sherpa-onnx Cam++ embeddings; cosine similarity in Dart |
+| Summarization | `flutter_llama` (Qwen2.5-0.5B GGUF) |
+| Storage | sqflite (WAL, FTS4 `segment_search`) |
+| i18n | GetX translations (`en_US` / `vi_VN`) |
+| Background | Android foreground service (`clearhear/foreground_service`) |
 
-```mermaid
-flowchart TB
-    subgraph P["Presentation · GetX Views"]
-        Shell[MainShell · bottom nav]
-        Home[HomeView · Live]
-        Hist[HistoryView]
-        Detail[SessionDetailView]
-        Setts[SettingsView]
-    end
+---
 
-    subgraph C["Controllers · GetxController"]
-        MainC[MainController]
-        HomeC[HomeController]
-        HistC[HistoryController]
-        DetailC[SessionDetailController]
-        SetC[SettingsController]
-    end
+## Getting started
 
-    subgraph S["Services"]
-        Live[LiveTranscriptService]
-        Cap[ConversationSegmentCapture]
-        Audio[AudioRecorderService]
-        Sherpa[SherpaOnnxService · streaming ASR]
-        Spk[SpeakerDiarizationService]
-        Llama[LlamaService]
-        Sum[SessionSummaryService · background queue]
-        FG[ForegroundServiceHandler]
-        Share[ShareService]
-        Export[TranscriptExportService]
-    end
+### Prerequisites
 
-    subgraph R["Repositories"]
-        SessR[SessionRepository]
-        SegR[SegmentRepository]
-        SetR[SettingsRepository]
-        HistR[HistoryRepository]
-        DetR[SessionDetailRepository]
-    end
+- [FVM](https://fvm.app) so the SDK matches `.fvmrc` (currently **3.44.4**); Dart `>=3.3.3 <4.0.0` (see `pubspec.yaml`)
+- iOS: Xcode + CocoaPods; Android: Android SDK, NDK, CMake **3.22+**
+- [Git LFS](https://git-lfs.com) — the summary GGUF (~469 MB) is stored via LFS
+- Microphone permission (live captioning)
+- ~700 MB+ free storage for models, runtime copies, and download overhead (GGUF ~469 MB + ASR ~72 MB + embedding ~27 MB; ONNX files are also copied from `assets/` into app data)
 
-    subgraph D["Data & Native"]
-        DBS[DatabaseService · sqflite]
-        DBF[(clearhear.db)]
-        AST[assets/models · Zipformer ONNX + Qwen GGUF]
-        NAT[Native FFI / channels · mic · foreground]
-        HF[HuggingFace CDN · model fallback]
-    end
-
-    Shell --> Home & Hist & Setts
-    Hist --> Detail
-    Home --> HomeC
-    Hist --> HistC
-    Detail --> DetailC
-    Setts --> SetC
-    Shell --> MainC
-
-    HomeC --> Live & Spk & FG & SessR & SegR & SetR
-    Live --> Audio & Sherpa & Spk & Cap
-    HistC --> HistR & Sum
-    DetailC --> DetR & Sum & Share
-    SetC --> SetR & SessR
-    HistR --> SessR
-    DetR --> SessR & SegR & Export
-
-    Sum --> Llama & DBS
-    SessR & SegR & SetR --> DBS
-    DBS --> DBF
-    Sherpa --> AST & NAT & HF
-    Spk --> AST & NAT & HF
-    Llama --> AST & NAT
-    Audio --> NAT
-    FG --> NAT
-```
-
-`SessionSummaryService` is the only orchestration service that bypasses the repository layer and uses `DatabaseService` directly, because it runs as an independent background job chain.
-
-### Live captioning flow
-
-Start → real-time streaming ASR → Stop → optional Save.
-
-```mermaid
-sequenceDiagram
-    actor U as User
-    participant V as HomeView
-    participant HC as HomeController
-    participant LT as LiveTranscriptService
-    participant MIC as AudioRecorderService
-    participant ASR as SherpaOnnxService
-    participant FG as ForegroundService
-    participant DB as Session / Segment Repos
-
-    U->>V: Tap "Start"
-    V->>HC: startCaptioning()
-    HC->>MIC: ensurePermission()
-    HC->>LT: start()
-    LT->>ASR: ensureModelReady() — copy asset / download HF
-    LT->>ASR: createStream()
-    LT->>MIC: startStreaming(onChunk)
-    HC-)FG: start()
-
-    loop Every PCM chunk (real-time)
-        MIC-->>LT: audio chunk
-        LT->>ASR: acceptWaveform + decode
-        ASR-->>LT: partial text
-        LT-->>HC: onPartialText → partialTranscript
-        alt Endpoint detected (trailing silence)
-            LT->>ASR: finalizeStream()
-            ASR-->>LT: final text
-            LT-->>HC: onSegmentFinalized → transcriptSegments
-        end
-    end
-
-    U->>V: Tap "Stop"
-    V->>HC: stopCaptioning() → finish()
-    LT-->>HC: LiveTranscriptResult(segments)
-    HC-->>V: show Save prompt
-    U->>V: Tap "Save"
-    V->>HC: savePendingSession(title)
-    HC->>DB: createSession + finishSession + insertSegments
-    DB-->>HC: ok (segment_search kept in sync by triggers)
-    HC-->>V: Toast "Saved"
-```
-
-### Summarization flow
-
-Runs on-device via `flutter_llama`, off the UI thread, driven by `SessionSummaryService`.
-
-```mermaid
-sequenceDiagram
-    actor U as User
-    participant V as SessionDetailView
-    participant DC as SessionDetailController
-    participant SS as SessionSummaryService
-    participant LL as LlamaService
-    participant DB as DatabaseService
-
-    U->>V: Open session
-    V-->>DC: onReady → loadDetail()
-    DC->>SS: queue(sessionId) if summary missing
-    SS->>DB: status = queued → processing
-    SS->>DB: read segments → transcript
-    SS->>LL: loadBundledModel() if not loaded
-    SS->>LL: summarize(transcript)
-    LL-->>SS: raw summary
-    SS->>SS: normalize (strip markdown, cap ~250 words)
-    SS->>DB: save summary, status = ready
-    SS-->>DC: updates stream (sessionId)
-    DC-->>V: refresh summary
-```
-
-## Speaker Diarization
-
-ClearHear automatically figures out **who is speaking** and tags each transcript line with a speaker label — all on-device, no internet needed.
-
-You don't tell the app who is talking. It analyzes each speaker's voice and assigns a consistent label throughout the session. The first person gets labeled **Speaker 1**, the second **Speaker 2**, and so on. When the same person speaks again later, they get the same label. Everything resets when you start a new session — "Speaker 1" in one session is unrelated to "Speaker 1" in another.
-
-This works because each speaker's voice can be represented by a distinctive acoustic embedding (sometimes called a voice fingerprint). ClearHear extracts that fingerprint from each utterance using a small on-device neural network (Cam++), then compares new voices against previously seen ones. If the voice matches a known speaker, it reuses that label. If it's a new voice, it registers a new speaker.
-
-### Example
-
-Two people talking:
-
-**Alice:** Good morning.  
-**Bob:** Hi Alice.  
-**Alice:** How are you?
-
-ClearHear captions this as:
-
-**Speaker 1:** Good morning.  
-**Speaker 2:** Hi Alice.  
-**Speaker 1:** How are you?
-
-The app doesn't know their names are Alice and Bob — but it correctly identifies that two distinct voices are present and attributes each line to the right person.
-
-The following sequence diagram shows how speaker labels are generated and updated during live captioning.
-
-### Speaker Diarization flow
-
-Each finalized ASR segment's audio is run through a **speaker embedding model** (sherpa-onnx Cam++, ONNX) to produce an embedding vector. This embedding is matched against previously seen speakers via **cosine similarity** (computed in Dart, not via sherpa-onnx's native manager). Labels (`Speaker 1`, `Speaker 2`, …) are assigned live and appear in the caption UI. The session resets the roster at every start.
-
-```mermaid
-sequenceDiagram
-    actor U as User
-    participant HC as HomeController
-    participant LT as LiveTranscriptService
-    participant ASR as SherpaOnnxService
-    participant Spk as SpeakerDiarizationService
-    participant UI as HomeView
-
-    U->>HC: startCaptioning()
-    HC->>LT: start()
-    LT->>Spk: ensureModelReady() (unawaited)
-    LT->>Spk: resetSession() — clear profiles
-
-    loop Every PCM chunk (real-time)
-        LT->>ASR: acceptWaveform + decode
-        ASR-->>LT: partial text
-        LT-->>HC: onPartialText
-
-        Note over LT,Spk: Early label (after >=1s audio, has speech energy)
-        LT->>LT: accumulate audio chunks
-        LT->>Spk: labelSegment(samples)
-        Spk->>Spk: extract embedding (Cam++ ONNX)
-        Spk->>Spk: cosine-similarity match against stored profiles
-        alt score >= 0.22 (match)
-            Spk-->>LT: reuse existing label ("Speaker 1")
-        else no match (new voice)
-            Spk-->>LT: register new label ("Speaker N")
-        end
-        LT-->>HC: onPartialSpeakerLabel
-        HC-->>UI: live badge updates
-
-        Note over LT,Spk: Speaker-change probe (every ~0.35s, trailing 0.8s window)
-        LT->>Spk: identifySpeaker(trailingWindow, relativeToLabel)
-        Spk->>Spk: extract embedding + cosine match (read-only)
-        Spk-->>LT: SpeakerProbeResult
-        alt different speaker confirmed (streak >= N)
-            LT->>ASR: force-cut: finalize current stream
-            LT->>LT: split text at cut boundary (token timestamps)
-            LT->>LT: commit old-speaker segment, carry tail to new stream
-        end
-
-        alt Endpoint detected (trailing silence)
-            LT->>LT: finalize segment (precomputed label or fallback)
-            LT-->>HC: onSegmentFinalized(segment, speakerLabel)
-            HC-->>UI: append segment with Speaker badge
-            HC->>HC: persistSegmentToDraft (speaker_label column)
-        end
-    end
-
-    U->>HC: stopCaptioning() -> finish()
-    HC->>LT: refineSpeakerLabels()
-    LT->>Spk: relabelSegments(segments) — chronological re-extraction
-    Spk-->>LT: updated labels
-    LT-->>HC: final segments with refined speaker labels
-```
-
-Key design decisions:
-
-- **Threshold 0.22** — tuned from real device logs of multi-speaker conversations with the bundled Cam++ embedding model (`3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx`, 16 kHz). Higher thresholds (0.3–0.5) caused false negatives; genuine same-speaker scores stay ≥0.22 while impostor scores remain ≤0.13. These score distributions are current empirical observations and may drift with future model or preprocessing changes.
-- **Multiple stored samples per speaker (up to 8)** — matching against the best individual sample is more robust than a single running-average centroid, because a real voice varies noticeably between short utterances.
-- **Read-only probes for speaker change** — `identifySpeaker()` never registers new speakers or updates stored samples, making it safe to call repeatedly on rolling windows mid-utterance.
-- **Confirmation gating** — a speaker-change probe must be confirmed 1–2 times (depending on confidence margin) before triggering a force-cut, preventing false switches from short cross-talk or noisy windows.
-- **Session-independent rosters** — `resetSession()` clears all profiles at every `start()`, so "Speaker 1" in session A is unrelated to "Speaker 1" in session B.
-
-## Data model
-
-SQLite (`clearhear.db`) with WAL mode and `foreign_keys = ON`. Full-text search is backed by an FTS4 virtual table kept in sync with `segments` through triggers.
-
-```mermaid
-erDiagram
-    SESSIONS ||--o{ SEGMENTS : "1-N (ON DELETE CASCADE)"
-    SEGMENTS ||--|| SEGMENT_SEARCH : "FTS4 mirror (triggers)"
-
-    SESSIONS {
-        int id PK
-        text title
-        int started_at
-        int ended_at
-        int duration_sec
-        int is_saved "0=draft, 1=saved"
-        text summary
-        text summary_status "idle/queued/processing/ready/failed/failed_resource"
-        text summary_error
-        text language
-        int created_at
-    }
-    SEGMENTS {
-        int id PK
-        int session_id FK
-        int start_ms
-        int end_ms
-        text text
-        int is_final
-        real confidence
-        text speaker_label
-        int created_at
-    }
-    SETTINGS {
-        int id PK "singleton, always 1"
-        real font_size "12.0-20.0"
-        text theme "light/dark/system"
-        int saving_enabled
-        int keep_screen_on
-        int power_saver
-        int updated_at
-    }
-    SEGMENT_SEARCH {
-        int docid FK "= segments.id"
-        text text
-        int session_id
-    }
-```
-
-- **sessions** — one row per captioning session. `is_saved = 0` marks an in-progress/draft session; `summary_status` tracks the async summary job.
-- **segments** — transcript lines, `ON DELETE CASCADE` from `sessions`.
-- **settings** — a single-row table (`id = 1`) for app preferences.
-- **segment_search** — FTS4 mirror of `segments.text`; do not write to it directly.
-
-## Requirements
-
-| Tool | Notes |
-|------|-------|
-| [FVM](https://fvm.app) | Project pins Flutter in `.fvmrc` (currently **3.44.4**) |
-| Xcode + CocoaPods | iOS builds (macOS only) |
-| Android SDK | NDK + CMake **3.22+** (Android SDK Manager) |
-| [Git LFS](https://git-lfs.com) | The summary GGUF is stored via LFS |
-| Internet | To fetch ASR (~72 MB) + speaker-embedding (~27 MB) ONNX when not already present in `assets/` |
-
-**Device / disk (approximate)**
-
-| Resource | Notes |
-|----------|-------|
-| Free storage | ~600 MB+ for models (GGUF ~469 MB + ASR ~72 MB + embedding ~27 MB) plus app binaries |
-| RAM | Mid-range phones recommended; ASR + LLM together are CPU/memory heavy |
-| Mic | Required for live captioning |
-
-Microphone permission is declared in `android/app/src/main/AndroidManifest.xml` and `ios/Runner/Info.plist`.
-
-## First-time setup
-
-From the project root:
+### Run
 
 ```bash
 fvm install && fvm use
@@ -370,46 +65,62 @@ fvm flutter pub get
 git lfs install
 git lfs pull
 
-# ASR model (sherpa-onnx Zipformer, ~72 MB) — NOT in the repo, fetch into assets/
+# ASR (~72 MB) + speaker-embedding (~27 MB) — git-ignored
 bash tool/download_sherpa_onnx_model.sh
 
-# Android — required after every pub get (patches flutter_llama's llama.cpp headers)
+# Android — rerun after EVERY pub get
 bash tool/setup_flutter_llama_android.sh
 
-# iOS — required after every pub get (patches flutter_llama's Swift bridge)
+# iOS — rerun after EVERY pub get
 bash tool/patch_flutter_llama_ios.sh
 cd ios && pod install && cd ..
+
+fvm flutter run
 ```
 
 Use `fvm flutter` (not a global Flutter SDK) so the version matches `.fvmrc`.
 
-> The ASR model directory `assets/models/sherpa-onnx-streaming-zipformer-en-2023-06-26/` is git-ignored. If you skip the download script, the app downloads the model from HuggingFace when it is not already present in `assets/`.
+The ASR directory `assets/models/sherpa-onnx-streaming-zipformer-en-2023-06-26/` is git-ignored. If you skip the download script, the app downloads the model from Hugging Face when it is not already present in `assets/`.
 
-## Run
+Use a **full rebuild** after `pub get` or native plugin changes — hot reload is not reliable for this project.
+
+### Checks and codegen
 
 ```bash
-fvm flutter run
+fvm flutter analyze
+fvm flutter test
+fvm flutter test test/service/crash_recovery_service_test.dart
+fvm flutter test --plain-name "recovers each crashed draft"
 ```
 
-Use a **full rebuild** after `pub get` or native plugin changes — not hot reload.
+This project does not use `build_runner` / Freezed. CI (`.github/workflows/flutter-ci.yml`) runs `flutter pub get --enforce-lockfile`, `flutter analyze`, and `flutter test` on pull requests **and** pushes to `main` — so `pubspec.lock` must stay in sync, and tests must not depend on native ASR/LLM or downloaded models.
 
-## Models
+Release:
 
-Defaults are in `lib/config/ml_model_config.dart`:
+```bash
+fvm flutter build apk --release            # add --split-per-abi for smaller downloads
+fvm flutter build ipa --release --export-options-plist=ios/ExportOptions-adhoc.plist
+```
+
+Bump the app version in `pubspec.yaml` (`version: x.y.z+build`) before release. The Settings screen reads that value.
+
+### Model configuration
+
+Configured in `lib/config/ml_model_config.dart`.
 
 | Feature | Default |
 |---------|---------|
-| Transcription | sherpa-onnx streaming **Zipformer2**, English (int8 ONNX) |
-| Speaker diarization | sherpa-onnx **Cam++** embedding extractor (3D-Speaker, ONNX); cosine-similarity matching in Dart |
-| Summarization | **Qwen2.5-0.5B-Instruct** (GGUF via `flutter_llama`) |
+| Transcription | sherpa-onnx streaming **Zipformer2**, English (int8 ONNX, ~72 MB) |
+| Speaker diarization | sherpa-onnx **Cam++** embedding extractor (3D-Speaker, ONNX, ~27 MB); cosine-similarity matching in Dart |
+| Summarization | **Qwen2.5-0.5B-Instruct** (GGUF via `flutter_llama`, ~469 MB) |
 | Segment boundary | endpoint detection on trailing silence (~0.8 s) |
 | Audio | 16 kHz mono PCM |
 
 **Model distribution**
 
 - **ASR (ONNX)** — encoder / decoder / joiner + `tokens.txt`. Fetched by `tool/download_sherpa_onnx_model.sh` into `assets/models/...`; the app copies them to its data directory. If they are not already present in `assets/`, `SherpaOnnxService` downloads them from Hugging Face as a fallback.
-- **Speaker embedding (ONNX)** — `3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx` (~27 MB). Fetched by the same download script; the app copies it alongside the ASR model with the same Hugging Face fallback.
-- **Summary (GGUF)** — `assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf`, stored with **Git LFS**. After cloning:
+- **Speaker embedding (ONNX)** — `3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx`. Fetched by the same download script; same Hugging Face fallback.
+- **Summary (GGUF)** — `assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf`, stored with **Git LFS**. A file that is only a few hundred bytes means Git LFS was not pulled.
 
 ```bash
 git lfs install
@@ -417,89 +128,486 @@ git lfs pull
 ls -lh assets/models/qwen2.5-0.5b-instruct-q4_k_m.gguf   # should be ~469 MB, not a small pointer
 ```
 
-Upstream licenses and attribution for these models (and major native deps) are listed in [NOTICE.md](NOTICE.md). Application source is [MIT](LICENSE); model weights keep their own upstream terms.
+Upstream licenses and attribution: [NOTICE.md](NOTICE.md). Application source is under the [NUS Technology Non-Commercial License 1.0](LICENSE) (personal/educational use; no commercial use; no redistribution); model weights keep their own upstream terms.
 
-## Privacy
+---
 
-Audio, captions, speaker embeddings, and summaries are processed **on the device**. There is no ClearHear backend. Network is used only to download missing ONNX models from Hugging Face when assets are absent. Users can disable saving and clear local data in Settings.
-
-## Build
-
-Bump the app version in `pubspec.yaml` (`version: x.y.z+build`) before release. The Settings screen reads that value.
-
-**Android APK**
-
-```bash
-fvm flutter build apk --release
-```
-
-Output: `build/app/outputs/flutter-apk/app-release.apk`
-
-Split per ABI (smaller downloads):
-
-```bash
-fvm flutter build apk --release --split-per-abi
-```
-
-**iOS IPA** (macOS + Xcode signing required)
-
-```bash
-fvm flutter build ipa --release --export-options-plist=ios/ExportOptions-adhoc.plist
-```
-
-Output: `build/ios/ipa/*.ipa`
-
-## Captioning flow
-
-1. **Start** — the mic streams PCM chunks straight into sherpa-onnx's streaming recognizer.
-2. **Real-time** — partial text is emitted after each decode cycle; a segment is finalized when endpoint detection sees trailing silence. An Android foreground service keeps capture alive in the background.
-3. **Stop** — `finish()` flushes any remaining audio and returns the segments; a Save prompt appears.
-4. **Save** — the session and its segments are written to SQLite (FTS index synced by triggers).
-5. **Summarize** — `SessionSummaryService` runs the on-device LLM off the UI thread and stores the summary.
-
-Debug logs: `[LiveTranscript]`, `[SherpaOnnx]`, `[Transcribe]`, `[SegmentCapture]`, `[Summary]`, `[DB]`.
-
-## Troubleshooting
-
-| Issue | Fix |
-|-------|-----|
-| ASR model fails to load / `SherpaOnnx model is not ready` | Run `bash tool/download_sherpa_onnx_model.sh` (or let the app download when not already present in `assets/`). Confirm `assets/models/sherpa-onnx-.../` is not empty |
-| Android: `flutter_llama` / CMake / `llama_context_type` errors | `bash tool/setup_flutter_llama_android.sh` after `pub get`, then full rebuild |
-| Android: CMake 3.19+ / `SPIRV-Headers` (`ggml-vulkan`) errors | Same script (CPU backend). Install CMake 3.22+ via Android SDK Manager if prompted |
-| iOS: app crashes on Summarize / `llama_init_model` SIGSEGV | `bash tool/patch_flutter_llama_ios.sh`, then `cd ios && pod install` and full rebuild |
-| Summary model fails to load (`INIT_FAILED`) | The GGUF in `assets/models/` is tracked by Git LFS. Install [Git LFS](https://git-lfs.com), run `git lfs pull`, confirm the file is ~469 MB (not a small pointer), then full rebuild |
-| `version solving failed` / `json_annotation` | Use `fvm flutter pub get` with the Flutter version from `.fvmrc` (currently **3.44.4**) |
-| `MissingPluginException` / mic unavailable | Full rebuild (`fvm flutter run`), not hot reload |
-| ASR model download fails | Check network; retry on Wi‑Fi |
-| ANR / UI freeze during ML | Ensure heavy work stays off the UI thread; rebuild with latest code |
-
-## Project layout
+## Project structure
 
 ```text
 lib/
-  arch/
-    repository/           # Interfaces + impl (session, segment, settings, history, detail)
-    route/                # GetX routes (AppRoutes / AppPages)
-  config/                 # ml_model_config.dart
-  lang/                   # i18n keys + translations
-  model/                  # Domain models (ConversationSegment, ...)
-  screen/                 # main, home (live), history, session_details, settings, development
-  service/                # Audio, SherpaOnnx (ASR), LiveTranscript, Llama,
-                          #   SessionSummary, Database, ForegroundService, Share, ...
-  shared/                 # Shared models / widgets / builders
-  style/  util/           # Theme, helpers (toast, logger, datetime)
+├── main.dart
+├── arch/
+│   ├── repository/       # Interfaces + impl (session, segment, settings, history, detail)
+│   └── route/            # GetX routes (AppRoutes / AppPages)
+├── config/               # ml_model_config.dart
+├── lang/                 # i18n keys + Translation
+├── model/                # ConversationSegment, TranscriptSegmentEntry
+├── screen/               # main, home (live), history, session_details, settings, development
+├── service/              # ASR, diarization, llama, summary, DB, crash recovery, ...
+├── shared/               # Shared models / widgets / builders
+├── style/                # AppColors / AppTheme
+└── util/                 # toast, logger, datetime
 tool/
-  download_sherpa_onnx_model.sh   # Fetch the ASR model (ONNX) into assets/
-  setup_flutter_llama_android.sh  # Patch flutter_llama for Android (after pub get)
-  patch_flutter_llama_ios.sh      # Patch flutter_llama for iOS (after pub get)
+  download_sherpa_onnx_model.sh
+  setup_flutter_llama_android.sh
+  patch_flutter_llama_ios.sh
 android/app/src/main/kotlin/com/nus/clearhear/
-  TranscriptionForegroundService.kt   # Foreground service (MethodChannel: clearhear/foreground_service)
+  TranscriptionForegroundService.kt
 ```
 
-## License
+Feature layout: **View → Controller → Service / Repository → DatabaseService / Native**
 
-Copyright 2026 NUS Technology.
+```text
+screen/{feature}/
+  bindings/  controllers/  widgets/  *_widget.dart | *_view.dart
+```
 
-Licensed under the [MIT License](LICENSE). Third-party software and ML model notices: [NOTICE.md](NOTICE.md).
+---
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+## Mobile architecture
+
+Code-layer view of the Flutter client. Runtime nodes (devices, models, Hugging Face) are in [Deployment / runtime topology](#deployment--runtime-topology).
+
+```mermaid
+flowchart TB
+  subgraph Client["Flutter App — ClearHear"]
+    direction TB
+    Views["Views<br/>MainShell / Home / History / Detail / Settings"]
+    Controllers["GetX Controllers<br/>Main · Home · History · SessionDetail · Settings"]
+    Services["Services<br/>LiveTranscript · SherpaOnnx · SpeakerDiarization<br/>Llama · SessionSummary · CrashRecovery"]
+    Repos["Repositories<br/>Session · Segment · Settings · History · SessionDetail"]
+    Views --> Controllers
+    Controllers --> Services
+    Controllers --> Repos
+  end
+
+  subgraph OnDevice["On-device"]
+    DBS[("clearhear.db · sqflite WAL")]
+    Native["Native FFI / channels<br/>mic · sherpa_onnx · flutter_llama"]
+    FG["Android ForegroundService"]
+    Assets["assets/models<br/>Zipformer ONNX · Cam++ · Qwen GGUF"]
+  end
+
+  Repos --> DBS
+  Services --> Native
+  Services --> Assets
+  Controllers --> FG
+  Services -.->|"ONNX missing from assets/"| HF["Hugging Face CDN"]
+```
+
+| Layer | Responsibility |
+|---|---|
+| **Views** | Render UI; call controller methods; react with `Obx` |
+| **Controllers** | Business logic, mic permissions, timers, session lifecycle |
+| **Services** | Streaming ASR, embeddings, LLM, summary queue, crash recovery |
+| **Repositories** | Typed SQLite access via `DatabaseService` (interface + impl) |
+| **Native** | FFI sherpa-onnx / llama; MethodChannel foreground service |
+| **Hugging Face** | Fallback ONNX download when assets are missing — not an app backend |
+
+`SessionSummaryService` is the **one exception**: it bypasses repositories and queries `DatabaseService` directly, because it runs as an independent background job chain.
+
+`HistoryRepository` and `SessionDetailRepository` **compose** those repositories and never touch the database directly (`SessionDetailRepository` also wraps `TranscriptExportService`).
+
+### Feature map
+
+```mermaid
+flowchart LR
+  Live --> Captioning
+  Captioning --> SavePrompt
+  SavePrompt --> History
+  History --> SessionDetail
+  SessionDetail --> Summary
+  Live --> Settings
+  Settings --> Development
+```
+
+---
+
+## Sequence diagrams
+
+### 1. Cold start and model load
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Main as main()
+  participant Trans as Translation
+  participant DB as DatabaseService
+  participant Shell as MainShell
+  participant MainCtrl as MainController
+  participant Rec as CrashRecoveryService
+  participant Home as HomeController
+  participant ASR as SherpaOnnxService
+
+  Main->>Trans: load() en_US + vi_VN
+  Main->>DB: Get.put permanent
+  Main->>Shell: GetMaterialApp.router
+  Main->>MainCtrl: MainBinding → onInit
+  MainCtrl->>Rec: recoverUnsavedSessions()
+  Rec-->>MainCtrl: promote drafts with segments / delete empty ones
+  Home->>ASR: ensureModelReady()
+  alt Assets present
+    ASR->>ASR: copy ONNX into app support
+  else Assets missing
+    ASR->>ASR: download Hugging Face + progress
+  end
+  ASR-->>Home: isAsrModelReady
+```
+
+### 2. Live captioning
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant V as HomeView
+  participant HC as HomeController
+  participant LT as LiveTranscriptService
+  participant MIC as AudioRecorderService
+  participant ASR as SherpaOnnxService
+  participant Spk as SpeakerDiarizationService
+  participant FG as ForegroundService
+  participant DB as Session / Segment Repos
+
+  User->>V: Tap Start
+  V->>HC: startCaptioning()
+  HC->>MIC: ensurePermission()
+  HC->>LT: start()
+  LT->>ASR: createStream()
+  LT->>MIC: startStreaming(onChunk)
+  LT->>Spk: resetSession()
+  HC-)FG: start()
+
+  loop Every PCM chunk
+    MIC-->>LT: audio chunk
+    LT->>ASR: acceptWaveform + decode
+    ASR-->>LT: partial text
+    LT-->>HC: onPartialText
+    Note over LT,Spk: Early label after >=1s audio
+    LT->>Spk: labelSegment / identifySpeaker
+    Spk-->>LT: Speaker N or change probe
+    alt Endpoint silence or speaker-change force-cut
+      LT-->>HC: onSegmentFinalized
+      HC->>DB: persistSegmentToDraft is_saved=0
+    end
+  end
+
+  User->>V: Tap Stop
+  V->>HC: stopCaptioning() → finish()
+  HC->>DB: drain in-flight draft writes
+  HC-->>V: Save prompt
+  User->>V: Tap Save
+  V->>HC: savePendingSession(title)
+  HC->>DB: markSessionSaved on the existing draft
+  Note over HC,DB: Must not create a second session — that duplicates rows if the app is killed mid-save
+  HC-->>V: Toast Saved
+```
+
+Speaker notes:
+
+- Cosine threshold **0.22** (`MlModelConfig.diarizationSpeakerMatchThreshold`) — tuned from real device logs with the bundled Cam++ 16 kHz model. Impostor scores typically stay ≤0.13.
+- Up to **8 stored samples** per speaker; match against the best individual sample, not a running-average centroid.
+- Speaker-change probes are **read-only** (`identifySpeaker`) — they never register new speakers mid-utterance.
+- Session-independent rosters: `resetSession()` at every `start()`, so "Speaker 1" in session A is unrelated to "Speaker 1" in session B.
+- The `.wav` file the recorder writes is an artifact only — it is deleted and never used for ASR.
+
+### 3. On-device summary
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant V as SessionDetailView
+  participant DC as SessionDetailController
+  participant SS as SessionSummaryService
+  participant LL as LlamaService
+  participant DB as DatabaseService
+
+  User->>V: Open session
+  V-->>DC: onReady → loadDetail()
+  DC->>SS: queue(sessionId) if summary missing
+  SS->>DB: status queued → processing
+  SS->>DB: read segments → transcript
+  SS->>LL: loadBundledModel() if not loaded
+  SS->>LL: summarize(transcript)
+  LL-->>SS: raw summary
+  SS->>SS: normalize markdown, cap length
+  SS->>DB: save summary, status ready
+  SS-->>DC: updates stream
+  DC-->>V: refresh summary
+```
+
+Jobs run one at a time on a single `_jobChain`. Status values: `idle` / `queued` / `processing` / `ready` / `failed` / `failed_resource`.
+
+---
+
+## Captioning lifecycle
+
+Session states driven by `HomeController` and `MicrophoneInterruptionManager`: start / pause / resume / stop, mic permission, and OS audio interruptions (phone calls, audio focus).
+
+Interruption timeout is **5 minutes**. When it elapses, the in-progress draft is auto-saved.
+
+### Captioning — `HomeController`
+
+```mermaid
+stateDiagram-v2
+  [*] --> LoadingModel: open /live
+  LoadingModel --> Idle: ASR ready
+  LoadingModel --> Idle: load error
+  Idle --> Live: startCaptioning
+  Idle --> Idle: mic permission denied
+  Live --> Paused: pauseCaptioning
+  Paused --> Live: resumeCaptioning
+  Live --> Finishing: stopCaptioning
+  Paused --> Finishing: stopCaptioning
+  Live --> Interrupted: mic interruption
+  Interrupted --> Paused: interruption ended
+  Interrupted --> AutoSaved: 5 min timeout
+  Finishing --> SavePrompt: finish OK + savingEnabled
+  Finishing --> Idle: empty transcript / error
+  SavePrompt --> Idle: markSessionSaved or discard
+  AutoSaved --> Idle: savePendingSession
+```
+
+### Interruption — `MicrophoneInterruptionManager`
+
+```mermaid
+stateDiagram-v2
+  [*] --> IdleState: no session
+  IdleState --> Active: onSessionStarted
+  Active --> Interrupted: interruption began → pauseCaptioning
+  Interrupted --> PausedByInterruption: ended before 5 min
+  Interrupted --> AutoSaved: 5 min timeout
+  PausedByInterruption --> Active: user resumeCaptioning
+  AutoSaved --> IdleState: onSessionEnded
+  Active --> IdleState: onSessionEnded
+  PausedByInterruption --> IdleState: onSessionEnded
+```
+
+| Flag / signal | Owner | Meaning |
+|---|---|---|
+| `isAsrModelReady` / `isAsrModelLoading` | Home | Zipformer copied or downloaded |
+| `isCaptioning` | Home | Session running (including while paused) |
+| `isPaused` / `isPausing` | Home | User pause vs in-flight pause transition |
+| `isInterrupted` | Home | OS cut the mic (call / audio focus) |
+| `isFinishingTranscript` | Home | Stop started; blocks overlapping start/stop |
+| `showSaveSessionPrompt` | Home | Save sheet after `finish()` |
+| `is_saved = 0` | DB | Incremental draft while recording |
+
+---
+
+## Crash recovery / draft sessions
+
+Triggered at startup from `MainController.onInit` → `CrashRecoveryService.recoverUnsavedSessions()`. Segments are persisted **incrementally while recording** into a draft session (`is_saved = 0`) via `_persistSegmentToDraft`.
+
+Two paths then finalize that draft, and both must yield exactly **one** row:
+
+- **Normal save** — `savePendingSession()` promotes the existing draft in place with `markSessionSaved(...)`. It must **not** create a second session and copy segments; doing so reintroduces a duplicate-session bug when the app is killed mid-save. `_saveAsNewSession` is only a fallback for when no draft exists.
+- **Crash recovery** — promotes leftover drafts that have segments, deletes empty ones, and cleans orphan recordings.
+
+History and search only show saved rows (`is_saved = 1`).
+
+```mermaid
+flowchart TD
+  Start([MainController.onInit]) --> Recover["CrashRecoveryService.recoverUnsavedSessions"]
+  Recover --> Drafts["getUnsavedSessions is_saved=0"]
+  Drafts --> HasDraft{Any drafts?}
+  HasDraft -->|No| Done([Continue to Live tab])
+  HasDraft -->|Yes| HasSeg{Draft has segments?}
+
+  HasSeg -->|No| DeleteDraft["deleteSession"]
+  DeleteDraft --> Orphans
+  HasSeg -->|Yes| Promote["markSessionSaved + auto title from date"]
+  Promote --> Orphans["AudioRecorderService.cleanupOrphanRecordings"]
+  Orphans --> Refresh["HistoryController.refreshHistory if recovered > 0"]
+  Refresh --> Done
+```
+
+Notes:
+
+- Recovery auto title uses `StringKeys.homeSaveSessionAutoTitle` with `YYYY-MM-DD`.
+- If Settings has saving disabled (`saving_enabled = 0`), stop does not show the save prompt and the draft is discarded.
+- A mic interruption longer than 5 minutes calls `savePendingSession` with the default title.
+
+---
+
+## Deployment / runtime topology
+
+Focus: **which processes talk to which**. Control and media both stay **on-device**. There is no REST API and no LiveKit.
+
+```mermaid
+flowchart TB
+  subgraph Devices["Client device"]
+    LiveTab["Live tab"]
+    HistTab["History / Detail"]
+    SetTab["Settings"]
+  end
+
+  subgraph OnDevice["One Flutter process + native"]
+    Controllers["GetX controllers"]
+    Services["Dart services"]
+    Repos["Repositories"]
+    SQLite[("clearhear.db")]
+    ASR["sherpa-onnx Zipformer"]
+    Spk["Cam++ embedding"]
+    LLM["flutter_llama Qwen GGUF"]
+    Mic["Microphone PCM 16 kHz"]
+    FGS["Android ForegroundService"]
+
+    Controllers --> Services
+    Controllers --> Repos
+    Controllers --> FGS
+    Services --> ASR
+    Services --> Spk
+    Services --> LLM
+    Services --> Mic
+    Repos --> SQLite
+    Services -.->|"SessionSummaryService only"| SQLite
+  end
+
+  LiveTab --> Controllers
+  HistTab --> Controllers
+  SetTab --> Controllers
+
+  Services -.->|"ONNX missing"| HF["Hugging Face CDN"]
+```
+
+| Plane | Protocol | Examples |
+|---|---|---|
+| **Control** | Dart in-process | Controllers, repositories, GetX DI |
+| **Media / ASR** | PCM → sherpa-onnx FFI | Partial text, endpoint, speaker embeddings |
+| **Summarization** | GGUF via flutter_llama | `SessionSummaryService._jobChain` |
+| **Persistence** | SQLite WAL | sessions, segments, settings, FTS4 |
+| **Network (optional)** | HTTPS | ONNX download from Hugging Face when assets are missing |
+| **Background** | MethodChannel | `clearhear/foreground_service` keeps the mic alive when Android is backgrounded |
+
+Audio, captions, embeddings, and summaries **do not leave the device**, except the optional ONNX download. Users can disable saving and clear local data in Settings.
+
+```bash
+fvm flutter run
+fvm flutter build apk --release
+fvm flutter build ipa --release --export-options-plist=ios/ExportOptions-adhoc.plist
+```
+
+---
+
+## Conceptual data model
+
+SQLite (`clearhear.db`) with WAL mode and `foreign_keys = ON`. Schema lives in `lib/service/database_service.dart` (migrations in `_onUpgrade`). `segment_search` is an **FTS4 mirror of `segments.text` kept in sync by triggers**; never write to it directly.
+
+### Confirmed from schema / models
+
+- **SESSIONS** — `SessionModel` (`title`, timestamps, `is_saved`, `summary`, `summary_status`)
+- **SEGMENTS** — `SegmentModel` (`start_ms` / `end_ms`, `text`, `speaker_label`)
+- **SETTINGS** — `SettingsModel` singleton `id = 1`
+- **SEGMENT_SEARCH** — FTS4; `docid = segments.id`
+
+```mermaid
+erDiagram
+  SESSIONS ||--o{ SEGMENTS : "1-N ON DELETE CASCADE"
+  SEGMENTS ||--|| SEGMENT_SEARCH : "FTS4 mirror triggers"
+
+  SESSIONS {
+    int id PK
+    text title
+    int started_at
+    int ended_at
+    int duration_sec
+    int is_saved "0 draft 1 saved"
+    text summary
+    text summary_status "idle queued processing ready failed failed_resource"
+    text summary_error
+    text language
+    int created_at
+  }
+
+  SEGMENTS {
+    int id PK
+    int session_id FK
+    int start_ms
+    int end_ms
+    text text
+    int is_final
+    real confidence
+    text speaker_label
+    int created_at
+  }
+
+  SETTINGS {
+    int id PK "always 1"
+    real font_size "12.0-20.0"
+    text theme "light dark system"
+    int saving_enabled
+    int keep_screen_on
+    int power_saver
+    int updated_at
+  }
+
+  SEGMENT_SEARCH {
+    int docid "FTS rowid mirror of segments.id"
+    text text
+    int session_id
+  }
+```
+
+| Entity | Confidence | Notes |
+|---|---|---|
+| **SESSIONS** | Confirmed schema | History only shows `is_saved = 1` |
+| **SEGMENTS** | Confirmed schema | Partial text is never written — memory only |
+| **SETTINGS** | Confirmed schema | Single row, `id = 1` |
+| **SEGMENT_SEARCH** | Confirmed schema | Trigger-maintained; do not `INSERT` by hand |
+
+Runtime-only (not DB tables): PCM buffers, `ConversationSegment`, model-download progress.
+
+---
+
+## Main routes
+
+Nested under `MainShell` (`GetRouterOutlet`). Initial route: `/live`.
+
+| Path | Screen |
+|---|---|
+| `/` | MainShell (bottom nav) |
+| `/live` | Live captioning (`HomeView`) |
+| `/history` | Session history |
+| `/history/detail/:id` | Session detail + summary |
+| `/settings` | Settings |
+| `/settings/development` | Development (from Settings) |
+
+Declared in `lib/arch/route/app_route.dart`. Each screen has its own `bindings/` file. `MainBinding` registers the shared services/repositories plus a **permanent** `HomeController`.
+
+---
+
+## Localization
+
+The app ships **two locales** (`en_US`, `vi_VN`). Every user-facing string goes through GetX translations — there are no hardcoded literals in widgets.
+
+- Assets: `assets/i18n/en_us.json`, `assets/i18n/vi_vn.json`
+- Keys: `lib/lang/string_keys.dart`
+- Load: `lib/lang/translation.dart` (`Translation.load()` in `main()`)
+
+```dart
+Text(StringKeys.homeStartCaptioning.tr)
+```
+
+Skipping `vi_vn.json` does not fail the build — the Vietnamese UI just renders the raw key.
+
+To add a string:
+
+1. add the constant to `lib/lang/string_keys.dart`
+2. add the same key to **both** `assets/i18n/en_us.json` and `assets/i18n/vi_vn.json`
+3. use `StringKeys.someKey.tr`
+
+---
+
+## Conventions
+
+- Keep source and user-facing copy in English keys + i18n JSON (no hardcoded UI strings).
+- Toasts: `AppToast.success/error/warning/info` (`lib/util/toast/`). Never `Get.snackbar`.
+- Logging: `AppLogger.info/warning/error` with a `tag:` (`lib/util/logger/`). Never `print`.
+- Colors: prefer `AppColors` / `AppTheme` in `lib/style/theme.dart`.
+- Shared widgets: check `lib/shared/widgets/` (`AppDialog`, `AppLoading`, `AppTitlebar`, `HighlightedText`, `InlineEditableTitle`) before writing a new one.
+- Commit subjects follow `type(scope): summary` (e.g. `fix(home): ...`). PRs are squashed to a single commit.
+- Tests use hand-written fakes implementing the repository interfaces (see `test/service/crash_recovery_service_test.dart`, `test/screen/home/home_controller_save_test.dart`); keep native ASR/LLM/mic out of tests by injecting fakes into `HomeController`.
+- Draft sessions and crash recovery are easy to break — read `savePendingSession` and `CrashRecoveryService` before changing save paths.
